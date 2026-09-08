@@ -234,9 +234,15 @@ class ScreenOffAccessibilityService :
                 key == SettingsRepository.KEY_AOD_WALLPAPER_CUSTOM_IMAGE ||
                 key == SettingsRepository.KEY_AOD_WALLPAPER_USE_ALBUM_ART ||
                 key == SettingsRepository.KEY_AOD_WALLPAPER_KEEP_ON_MEDIA ||
-                key == SettingsRepository.KEY_AOD_WALLPAPER_MEDIA_EXCLUDED_APPS
+                key == SettingsRepository.KEY_AOD_WALLPAPER_MEDIA_EXCLUDED_APPS ||
+                key == SettingsRepository.KEY_UNIFIED_WALLPAPER_SOURCE_ID
             ) {
-                if (key == SettingsRepository.KEY_AOD_WALLPAPER_CUSTOM_IMAGE) {
+                // The unified pick rewrites custom_aod_wallpaper.png in place. Writing the custom
+                // image flag again does not fire a change when it is already set, so without the
+                // source id the handler would keep serving its cached bitmap.
+                if (key == SettingsRepository.KEY_AOD_WALLPAPER_CUSTOM_IMAGE ||
+                    key == SettingsRepository.KEY_UNIFIED_WALLPAPER_SOURCE_ID
+                ) {
                     aodWallpaperOverlayHandler.invalidateWallpaperCache()
                 }
                 aodWallpaperOverlayHandler.updateState()

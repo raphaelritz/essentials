@@ -64,7 +64,6 @@ class UnifiedWallpaperService : WallpaperService() {
         private var renderedBlur = -1f
         private var surfaceWidth = 0
         private var surfaceHeight = 0
-        private var xOffset = 0.5f
 
         private val prefsListener =
             SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -80,7 +79,10 @@ class UnifiedWallpaperService : WallpaperService() {
             super.onCreate(surfaceHolder)
             repository = SettingsRepository(applicationContext)
             repository.registerOnSharedPreferenceChangeListener(prefsListener)
-            setOffsetNotificationsEnabled(true)
+            // The source is stored already cropped to the screen, so there is nothing to slide.
+            // Redrawing per offset callback was both over-travelled and visibly behind the finger;
+            // a still wallpaper is the honest match for the stock one here.
+            setOffsetNotificationsEnabled(false)
         }
 
         override fun onSurfaceChanged(
@@ -98,21 +100,6 @@ class UnifiedWallpaperService : WallpaperService() {
         override fun onVisibilityChanged(visible: Boolean) {
             super.onVisibilityChanged(visible)
             if (visible) draw()
-        }
-
-        override fun onOffsetsChanged(
-            xOffsetValue: Float,
-            yOffset: Float,
-            xOffsetStep: Float,
-            yOffsetStep: Float,
-            xPixelOffset: Int,
-            yPixelOffset: Int,
-        ) {
-            super.onOffsetsChanged(xOffsetValue, yOffset, xOffsetStep, yOffsetStep, xPixelOffset, yPixelOffset)
-            // Only redraw when the parallax actually moved enough to be visible.
-            if (kotlin.math.abs(xOffsetValue - xOffset) < 0.001f) return
-            xOffset = xOffsetValue
-            draw()
         }
 
         /**
@@ -196,10 +183,7 @@ class UnifiedWallpaperService : WallpaperService() {
             }
         }
 
-        /**
-         * Centre-crops the bitmap over the surface, shifting horizontally with the launcher's
-         * parallax offset so paging feels the same as a static wallpaper.
-         */
+        /** Centre-crops the bitmap over the surface, with no horizontal travel. */
         private fun destinationFor(bitmap: Bitmap): RectF {
             val scale =
                 maxOf(
@@ -208,8 +192,7 @@ class UnifiedWallpaperService : WallpaperService() {
                 )
             val scaledWidth = bitmap.width * scale
             val scaledHeight = bitmap.height * scale
-            val overflowX = scaledWidth - surfaceWidth
-            val left = -overflowX * xOffset
+            val left = -(scaledWidth - surfaceWidth) / 2f
             val top = -(scaledHeight - surfaceHeight) / 2f
             return RectF(left, top, left + scaledWidth, top + scaledHeight)
         }

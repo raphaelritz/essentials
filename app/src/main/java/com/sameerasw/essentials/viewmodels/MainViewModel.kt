@@ -3938,7 +3938,12 @@ class MainViewModel : ViewModel() {
             isUnifiedWallpaperApplying.value = true
             var ok = false
             try {
-                val source = decodeForWallpaper(context, uri)
+                val decoded = decodeForWallpaper(context, uri)
+                // Crop once, here. Each surface crops differently otherwise: the system frames a
+                // setBitmap its own way, the launcher shifts it for parallax, and the AOD overlay
+                // centre-crops in an ImageView — which is why the same picture showed a different
+                // part of itself on each screen.
+                val source = decoded?.let { centerCropToScreen(context, it) }
                 if (source != null) {
                     // Keep the pristine copy first: everything else re-derives from it.
                     com.sameerasw.essentials.services.UnifiedWallpaperService
@@ -3997,6 +4002,50 @@ class MainViewModel : ViewModel() {
      * @param uri [android.net.Uri] The picked image.
      * @return The decoded bitmap, or null.
      */
+    /**
+     * Centre-crops and scales a bitmap to exactly the display size, so every surface shows the same
+     * framing and the live wallpaper has no overflow to slide around.
+     *
+     * @param context [Context] Target context.
+     * @param source [android.graphics.Bitmap] The decoded image.
+     * @return A screen-sized bitmap.
+     */
+    private fun centerCropToScreen(
+        context: Context,
+        source: android.graphics.Bitmap,
+    ): android.graphics.Bitmap {
+        val metrics = context.resources.displayMetrics
+        val targetWidth = metrics.widthPixels
+        val targetHeight = metrics.heightPixels
+        if (targetWidth <= 0 || targetHeight <= 0) return source
+
+        val scale =
+            maxOf(
+                targetWidth.toFloat() / source.width,
+                targetHeight.toFloat() / source.height,
+            )
+        val scaledWidth = (source.width * scale).toInt().coerceAtLeast(targetWidth)
+        val scaledHeight = (source.height * scale).toInt().coerceAtLeast(targetHeight)
+
+        return try {
+            val scaled = android.graphics.Bitmap.createScaledBitmap(source, scaledWidth, scaledHeight, true)
+            val cropped =
+                android.graphics.Bitmap.createBitmap(
+                    scaled,
+                    ((scaledWidth - targetWidth) / 2).coerceAtLeast(0),
+                    ((scaledHeight - targetHeight) / 2).coerceAtLeast(0),
+                    targetWidth,
+                    targetHeight,
+                )
+            if (scaled != cropped) scaled.recycle()
+            if (source != cropped) source.recycle()
+            cropped
+        } catch (e: Exception) {
+            e.printStackTrace()
+            source
+        }
+    }
+
     private fun decodeForWallpaper(
         context: Context,
         uri: android.net.Uri,

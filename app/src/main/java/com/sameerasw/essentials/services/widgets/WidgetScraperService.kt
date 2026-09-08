@@ -113,6 +113,9 @@ class WidgetScraperService : Service() {
 
         private const val NOTIFICATION_ID = 8421
 
+        /** How often the host view is re-created to pull the provider's current views. */
+        private const val REFETCH_INTERVAL_MS = 15_000L
+
         /** Fallback searchbar height in dp, used until the Glance widget reports its real size. */
         private const val FALLBACK_HEIGHT_DP = 56
 
@@ -265,6 +268,7 @@ class WidgetScraperService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
             isForeground = true
+            Log.i(TAG, "scraper running in the foreground")
         } catch (t: Throwable) {
             Log.w(TAG, "Could not run in the foreground; updates may lag", t)
         }
@@ -274,6 +278,45 @@ class WidgetScraperService : Service() {
         if (!isForeground) return
         runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
         isForeground = false
+    }
+
+    /**
+     * Re-creates the host view on a cadence.
+     *
+     * Provider pushes do not appear to reach this off-screen host: the only refresh that has ever
+     * been observed working is AppWidgetHost.createView, which pulls the system's current views for
+     * the widget. Process death used to supply that by accident, which is why keeping the service
+     * alive stopped updates entirely. This makes the refetch deliberate instead. It is a stopgap —
+     * the logging above is there to find why the push path is silent.
+     */
+    private val refetchRunnable =
+        object : Runnable {
+            override fun run() {
+                if (settingsRepository.getPixelSearchbarType() == "widget") {
+                    refetchWidgetViews()
+                    handler.postDelayed(this, REFETCH_INTERVAL_MS)
+                }
+            }
+        }
+
+    private fun scheduleRefetch() {
+        handler.removeCallbacks(refetchRunnable)
+        handler.postDelayed(refetchRunnable, REFETCH_INTERVAL_MS)
+    }
+
+    /** Asks the framework for the widget's current views without tearing the host down. */
+    private fun refetchWidgetViews() {
+        val host = appWidgetHost ?: return
+        val widgetId = settingsRepository.getPixelSearchbarWidgetId()
+        if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return
+        val info = AppWidgetManager.getInstance(this).getAppWidgetInfo(widgetId) ?: return
+        try {
+            val view = host.createView(this, widgetId, info)
+            hostView = view
+            applyHostSize(view, widgetId)
+        } catch (t: Throwable) {
+            Log.w(TAG, "Refetch failed", t)
+        }
     }
 
     private fun bindAndListenWidget() {
@@ -297,6 +340,7 @@ class WidgetScraperService : Service() {
                 return
             }
 
+        Log.i(TAG, "binding widget id=$widgetId provider=${info.provider}")
         val host = ScrapingWidgetHost(this, HOST_ID)
         appWidgetHost = host
 
@@ -307,6 +351,7 @@ class WidgetScraperService : Service() {
         hostView = view
         host.startListening()
         applyHostSize(view, widgetId)
+        scheduleRefetch()
     }
 
     /**
@@ -544,6 +589,9 @@ class WidgetScraperService : Service() {
     }
 
     private fun onRemoteViewsReceived(remoteViews: RemoteViews) {
+        // Timestamped so the gap between the provider pushing and the searchbar changing can be
+        // measured rather than guessed at.
+        Log.i(TAG, "scrape received at ${System.currentTimeMillis()} layout=${runCatching { remoteViews.layoutId }.getOrNull()}")
         // Keep our own copy: the host view retains this instance, and nesting it in a Glance tree
         // mutates it in place (configureAsChild re-points its caches at the enclosing root).
         val own = runCatching { RemoteViews(remoteViews) }.getOrDefault(remoteViews)
@@ -560,6 +608,7 @@ class WidgetScraperService : Service() {
 
         handler.postDelayed({
             updatePending = false
+            Log.i(TAG, "publishing scrape to Glance at ${System.currentTimeMillis()}")
             settingsRepository.incrementPixelSearchbarWidgetRevision()
 
             serviceScope.launch {
@@ -576,6 +625,7 @@ class WidgetScraperService : Service() {
 
     /** Tears the host down but keeps the last scrape, for rebinding without a visible gap. */
     private fun releaseWidgetHost() {
+        handler.removeCallbacks(refetchRunnable)
         appWidgetHost?.stopListening()
         appWidgetHost = null
         hostView = null
