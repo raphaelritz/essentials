@@ -89,8 +89,8 @@ android {
         applicationId = "com.sameerasw.essentials"
         minSdk = 26
         targetSdk = 37
-        versionCode = 63
-        versionName = "18.0-beta.1-searchbar-fix"
+        versionCode = 64
+        versionName = "18.0-beta.1-searchbar-fix2"
 
         val whatsNewCounter = 2
         buildConfigField("int", "WHATS_NEW_COUNTER", whatsNewCounter.toString())
