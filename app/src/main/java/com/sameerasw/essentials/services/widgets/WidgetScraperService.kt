@@ -109,6 +109,10 @@ class WidgetScraperService : Service() {
 
         private const val TAG = "WidgetScraper"
 
+        private const val NOTIFICATION_CHANNEL_ID = "pixel_searchbar_scraper"
+
+        private const val NOTIFICATION_ID = 8421
+
         /** Fallback searchbar height in dp, used until the Glance widget reports its real size. */
         private const val FALLBACK_HEIGHT_DP = 56
 
@@ -135,6 +139,7 @@ class WidgetScraperService : Service() {
     private lateinit var settingsRepository: SettingsRepository
     private var appWidgetHost: ScrapingWidgetHost? = null
     private var hostView: AppWidgetHostView? = null
+    private var isForeground = false
     private val handler = Handler(Looper.getMainLooper())
 
     /**
@@ -192,14 +197,83 @@ class WidgetScraperService : Service() {
         startId: Int,
     ): Int {
         val type = settingsRepository.getPixelSearchbarType()
+        if (type == "widget" || type == "music") {
+            // Without this the process is killed between updates, and the provider's push then only
+            // reaches us after Android gets around to restarting the sticky service — which is why a
+            // widget change took a minute or more to show up while the launcher's own copy was
+            // instant. A hosted widget only receives updates while its host is alive.
+            if (settingsRepository.getPixelSearchbarKeepAlive()) enterForeground() else exitForeground()
+        }
         if (type == "widget") {
             bindAndListenWidget()
         } else if (type == "music") {
             listenToMusicSession()
         } else {
+            exitForeground()
             stopSelf()
         }
         return START_STICKY
+    }
+
+    /**
+     * Promotes the scraper to a foreground service so the widget host stays alive and provider
+     * updates land immediately. Falls back silently when the platform refuses the promotion.
+     */
+    private fun enterForeground() {
+        if (isForeground) return
+        try {
+            val manager = getSystemService(android.app.NotificationManager::class.java)
+            manager?.createNotificationChannel(
+                android.app.NotificationChannel(
+                    NOTIFICATION_CHANNEL_ID,
+                    getString(com.sameerasw.essentials.R.string.pixel_searchbar_keep_alive_channel),
+                    android.app.NotificationManager.IMPORTANCE_MIN,
+                ).apply {
+                    setShowBadge(false)
+                    setSound(null, null)
+                    enableVibration(false)
+                },
+            )
+
+            val tapIntent =
+                android.app.PendingIntent.getActivity(
+                    this,
+                    0,
+                    Intent(this, com.sameerasw.essentials.ui.activities.PixelSearchbarSettingsActivity::class.java),
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
+                )
+
+            val notification =
+                androidx.core.app.NotificationCompat
+                    .Builder(this, NOTIFICATION_CHANNEL_ID)
+                    .setSmallIcon(com.sameerasw.essentials.R.drawable.rounded_search_24)
+                    .setContentTitle(getString(com.sameerasw.essentials.R.string.pixel_searchbar_keep_alive_title))
+                    .setContentText(getString(com.sameerasw.essentials.R.string.pixel_searchbar_keep_alive_text))
+                    .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MIN)
+                    .setOngoing(true)
+                    .setShowWhen(false)
+                    .setContentIntent(tapIntent)
+                    .build()
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            isForeground = true
+        } catch (t: Throwable) {
+            Log.w(TAG, "Could not run in the foreground; updates may lag", t)
+        }
+    }
+
+    private fun exitForeground() {
+        if (!isForeground) return
+        runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+        isForeground = false
     }
 
     private fun bindAndListenWidget() {

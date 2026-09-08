@@ -557,6 +557,16 @@ fun PixelSearchbarSettingsUI(
                                 iconRes = R.drawable.rounded_search_24,
                             )
                         }
+
+                        RoundedCardContainer {
+                            IconToggleItem(
+                                iconRes = R.drawable.rounded_bolt_24,
+                                title = stringResource(R.string.pixel_searchbar_keep_alive_setting),
+                                description = stringResource(R.string.pixel_searchbar_keep_alive_desc),
+                                isChecked = viewModel.pixelSearchbarKeepAlive.value,
+                                onCheckedChange = { viewModel.setPixelSearchbarKeepAlive(it, context) },
+                            )
+                        }
                     }
                 }
 

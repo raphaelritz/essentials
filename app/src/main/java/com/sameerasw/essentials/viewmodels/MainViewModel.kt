@@ -207,6 +207,7 @@ class MainViewModel : ViewModel() {
     val pixelSearchbarWidgetPaddingV = mutableIntStateOf(0)
     val pixelSearchbarWidgetWidthOverride = mutableIntStateOf(0)
     val pixelSearchbarWidgetHeightOverride = mutableIntStateOf(0)
+    val pixelSearchbarKeepAlive = mutableStateOf(true)
     val pixelSearchbarTapActionEnabled = mutableStateOf(true)
     val pixelSearchbarMusicTitle = mutableStateOf("")
     val pixelSearchbarMusicArtist = mutableStateOf("")
@@ -1270,6 +1271,7 @@ class MainViewModel : ViewModel() {
             settingsRepository.getPixelSearchbarWidgetWidthOverride()
         pixelSearchbarWidgetHeightOverride.intValue =
             settingsRepository.getPixelSearchbarWidgetHeightOverride()
+        pixelSearchbarKeepAlive.value = settingsRepository.getPixelSearchbarKeepAlive()
         pixelSearchbarTapActionEnabled.value =
             settingsRepository.getPixelSearchbarTapActionEnabled()
         pixelSearchbarMusicTitle.value =
@@ -3587,6 +3589,23 @@ class MainViewModel : ViewModel() {
      * @param value [Int] Target value.
      * @param context [Context] Target context.
      */
+    /**
+     * Sets whether the scraper stays in the foreground so provider updates arrive immediately.
+     *
+     * @param value [Boolean] Target value.
+     * @param context [Context] Target context.
+     */
+    fun setPixelSearchbarKeepAlive(
+        value: Boolean,
+        context: Context,
+    ) {
+        pixelSearchbarKeepAlive.value = value
+        settingsRepository.setPixelSearchbarKeepAlive(value)
+        // Re-enter onStartCommand so the service promotes or demotes itself right away.
+        com.sameerasw.essentials.services.widgets.WidgetScraperService
+            .start(context)
+    }
+
     fun setPixelSearchbarWidgetWidthOverride(
         value: Int,
         context: Context,

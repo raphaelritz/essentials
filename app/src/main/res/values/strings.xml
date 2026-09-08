@@ -2195,6 +2195,11 @@
     <string name="pixel_searchbar_refresh_title">Re-apply searchbar</string>
     <string name="pixel_searchbar_refresh_desc">Re-scrape the widget and restart the launcher so changes take effect</string>
     <string name="pixel_searchbar_refresh_done">Searchbar re-applied</string>
+    <string name="pixel_searchbar_keep_alive_channel">Searchbar widget</string>
+    <string name="pixel_searchbar_keep_alive_title">Searchbar widget active</string>
+    <string name="pixel_searchbar_keep_alive_text">Keeps widget changes appearing instantly</string>
+    <string name="pixel_searchbar_keep_alive_setting">Instant widget updates</string>
+    <string name="pixel_searchbar_keep_alive_desc">Keeps the widget host running so changes appear straight away instead of after a delay. Adds a silent notification you can hide in system settings.</string>
     <string name="lock_screen_clock_hide_section">Hiding the clock</string>
     <string name="lock_screen_clock_hide_title">Hide clock (experimental)</string>
     <string name="lock_screen_clock_hide_desc">Draws the clock fully transparent. Android has no setting to remove it, so this depends on your build honouring a transparent colour. The always-on display clock is separate and is not affected.</string>

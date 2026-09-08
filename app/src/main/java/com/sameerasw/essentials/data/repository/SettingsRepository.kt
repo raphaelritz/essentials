@@ -396,6 +396,7 @@ class SettingsRepository(
         const val KEY_PIXEL_SEARCHBAR_WIDGET_HOST_HEIGHT = "pixel_searchbar_widget_host_height"
         const val KEY_PIXEL_SEARCHBAR_WIDGET_WIDTH_OVERRIDE = "pixel_searchbar_widget_width_override"
         const val KEY_PIXEL_SEARCHBAR_WIDGET_HEIGHT_OVERRIDE = "pixel_searchbar_widget_height_override"
+        const val KEY_PIXEL_SEARCHBAR_KEEP_ALIVE = "pixel_searchbar_keep_alive"
         const val KEY_PIXEL_SEARCHBAR_MUSIC_TITLE = "pixel_searchbar_music_title"
         const val KEY_PIXEL_SEARCHBAR_MUSIC_ARTIST = "pixel_searchbar_music_artist"
         const val KEY_PIXEL_SEARCHBAR_MUSIC_PACKAGE = "pixel_searchbar_music_package"
@@ -1893,6 +1894,19 @@ class SettingsRepository(
      * @return The resulting Int data.
      */
     fun getPixelSearchbarWidgetWidthOverride(): Int = prefs.getInt(KEY_PIXEL_SEARCHBAR_WIDGET_WIDTH_OVERRIDE, 0)
+
+    /**
+     * Whether the scraper runs in the foreground so provider updates arrive immediately.
+     * @return The resulting Boolean data.
+     */
+    fun getPixelSearchbarKeepAlive(): Boolean = getBoolean(KEY_PIXEL_SEARCHBAR_KEEP_ALIVE, true)
+
+    /**
+     * Sets whether the scraper runs in the foreground.
+     *
+     * @param value [Boolean] Target value.
+     */
+    fun setPixelSearchbarKeepAlive(value: Boolean) = putBoolean(KEY_PIXEL_SEARCHBAR_KEEP_ALIVE, value)
 
     /**
      * Sets the manual width override in dp; 0 restores the measured size.
