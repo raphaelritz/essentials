@@ -75,6 +75,11 @@ private fun ReportHostSize(
     }
 }
 
+/** How long a render waits for a fresh scrape before falling back to the placeholder. */
+private const val SCRAPE_WAIT_MS = 2000L
+
+private const val SCRAPE_POLL_MS = 100L
+
 class PixelSearchbarWidget : GlanceAppWidget() {
     override val sizeMode = androidx.glance.appwidget.SizeMode.Exact
 
@@ -106,6 +111,22 @@ class PixelSearchbarWidget : GlanceAppWidget() {
         // In widget mode the scraped widget carries its own click targets, so only claim taps when
         // the user actually asked for the DIY action. Both branches used to return an action, which
         // made the null check below dead and let this swallow every tap the widget did not handle.
+        // The launcher keeps showing the last RemoteViews across our process death, so a blank
+        // searchbar is self-inflicted: publishing a tree while the scrape is missing overwrites a
+        // perfectly good render with the placeholder. That is what made a reboot or a dark/light
+        // switch need a manual re-apply. Wake the scraper and give it a moment instead.
+        if (type == "widget" &&
+            WidgetScraperService.currentRemoteViews == null &&
+            settingsRepository.getPixelSearchbarWidgetId() != android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID
+        ) {
+            runCatching { WidgetScraperService.start(context) }
+            var waited = 0L
+            while (WidgetScraperService.currentRemoteViews == null && waited < SCRAPE_WAIT_MS) {
+                kotlinx.coroutines.delay(SCRAPE_POLL_MS)
+                waited += SCRAPE_POLL_MS
+            }
+        }
+
         val globalTapAction =
             when {
                 tapActionEnabled ->

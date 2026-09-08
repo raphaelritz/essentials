@@ -322,6 +322,11 @@ class SettingsRepository(
         const val KEY_AOD_WALLPAPER_VIGNETTE = "aod_wallpaper_vignette"
         const val KEY_AOD_WALLPAPER_BLACK_THRESHOLD = "aod_wallpaper_black_threshold"
         const val KEY_AOD_WALLPAPER_CUSTOM_IMAGE = "aod_wallpaper_custom_image"
+        const val KEY_UNIFIED_WALLPAPER_SOURCE_ID = "unified_wallpaper_source_id"
+        const val KEY_UNIFIED_WALLPAPER_BLUR_HOME = "unified_wallpaper_blur_home"
+        const val KEY_UNIFIED_WALLPAPER_APPLY_HOME = "unified_wallpaper_apply_home"
+        const val KEY_UNIFIED_WALLPAPER_APPLY_LOCK = "unified_wallpaper_apply_lock"
+        const val KEY_UNIFIED_WALLPAPER_APPLY_AOD = "unified_wallpaper_apply_aod"
         const val KEY_AOD_WALLPAPER_USE_ALBUM_ART = "aod_wallpaper_use_album_art"
         const val KEY_AOD_WALLPAPER_KEEP_ON_MEDIA = "aod_wallpaper_keep_on_media"
         const val KEY_AOD_WALLPAPER_MEDIA_EXCLUDED_APPS = "aod_wallpaper_media_excluded_apps"
@@ -3120,6 +3125,70 @@ class SettingsRepository(
     fun hasAodWallpaperCustomImage(): Boolean = getBoolean(KEY_AOD_WALLPAPER_CUSTOM_IMAGE, false)
 
     fun setAodWallpaperCustomImage(hasCustomImage: Boolean) = putBoolean(KEY_AOD_WALLPAPER_CUSTOM_IMAGE, hasCustomImage)
+
+    /**
+     * Bumped whenever a new unified wallpaper is picked, so listeners re-read the source file even
+     * when every other setting is unchanged.
+     * @return The resulting Int data.
+     */
+    fun getUnifiedWallpaperSourceId(): Int = getInt(KEY_UNIFIED_WALLPAPER_SOURCE_ID, 0)
+
+    /**
+     * Records that a new unified wallpaper source has been written.
+     */
+    fun bumpUnifiedWallpaperSourceId() = putInt(KEY_UNIFIED_WALLPAPER_SOURCE_ID, getUnifiedWallpaperSourceId() + 1)
+
+    /**
+     * Whether the home screen wallpaper shares the AOD blur.
+     * @return The resulting Boolean data.
+     */
+    fun getUnifiedWallpaperBlurHome(): Boolean = getBoolean(KEY_UNIFIED_WALLPAPER_BLUR_HOME, false)
+
+    /**
+     * Sets whether the home screen wallpaper shares the AOD blur.
+     *
+     * @param value [Boolean] Target value.
+     */
+    fun setUnifiedWallpaperBlurHome(value: Boolean) = putBoolean(KEY_UNIFIED_WALLPAPER_BLUR_HOME, value)
+
+    /**
+     * Whether a unified wallpaper pick applies to the home screen.
+     * @return The resulting Boolean data.
+     */
+    fun getUnifiedWallpaperApplyHome(): Boolean = getBoolean(KEY_UNIFIED_WALLPAPER_APPLY_HOME, true)
+
+    /**
+     * Sets whether a unified wallpaper pick applies to the home screen.
+     *
+     * @param value [Boolean] Target value.
+     */
+    fun setUnifiedWallpaperApplyHome(value: Boolean) = putBoolean(KEY_UNIFIED_WALLPAPER_APPLY_HOME, value)
+
+    /**
+     * Whether a unified wallpaper pick applies to the lock screen.
+     * @return The resulting Boolean data.
+     */
+    fun getUnifiedWallpaperApplyLock(): Boolean = getBoolean(KEY_UNIFIED_WALLPAPER_APPLY_LOCK, true)
+
+    /**
+     * Sets whether a unified wallpaper pick applies to the lock screen.
+     *
+     * @param value [Boolean] Target value.
+     */
+    fun setUnifiedWallpaperApplyLock(value: Boolean) = putBoolean(KEY_UNIFIED_WALLPAPER_APPLY_LOCK, value)
+
+    /**
+     * Whether a unified wallpaper pick applies to the always-on display.
+     * @return The resulting Boolean data.
+     */
+    fun getUnifiedWallpaperApplyAod(): Boolean = getBoolean(KEY_UNIFIED_WALLPAPER_APPLY_AOD, true)
+
+    /**
+     * Sets whether a unified wallpaper pick applies to the always-on display.
+     *
+     * @param value [Boolean] Target value.
+     */
+    fun setUnifiedWallpaperApplyAod(value: Boolean) = putBoolean(KEY_UNIFIED_WALLPAPER_APPLY_AOD, value)
 
     fun isAodWallpaperUseAlbumArtEnabled(): Boolean = getBoolean(KEY_AOD_WALLPAPER_USE_ALBUM_ART, false)
 

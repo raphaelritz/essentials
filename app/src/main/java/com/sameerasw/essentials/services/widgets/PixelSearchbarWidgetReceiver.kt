@@ -18,11 +18,29 @@ import kotlinx.coroutines.launch
 class PixelSearchbarWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = PixelSearchbarWidget()
 
+    private fun ensureScraperRunning(context: Context) {
+        try {
+            val repository =
+                com.sameerasw.essentials.data.repository
+                    .SettingsRepository(context)
+            val type = repository.getPixelSearchbarType()
+            if (type == "widget" || type == "music") {
+                WidgetScraperService.start(context)
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("PixelSearchbarWidget", "Could not re-arm the scraper", e)
+        }
+    }
+
     override fun onReceive(
         context: Context,
         intent: Intent,
     ) {
         super.onReceive(context, intent)
+
+        // Every wake-up that matters comes through here — user unlock, app replace, launcher
+        // rebind, the periodic update. Re-arm the scraper before anything renders.
+        ensureScraperRunning(context)
 
         val action = intent.action
         if (action == Intent.ACTION_CONFIGURATION_CHANGED ||

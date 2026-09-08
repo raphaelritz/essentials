@@ -139,6 +139,83 @@ fun AlwaysOnDisplaySettingsUI(
         }
 
         Text(
+            text = stringResource(R.string.unified_wallpaper_title),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        val unifiedPickerLauncher =
+            rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.GetContent(),
+            ) { uri ->
+                uri?.let { viewModel.applyUnifiedWallpaper(context, it) }
+            }
+
+        RoundedCardContainer {
+            IconToggleItem(
+                iconRes = R.drawable.rounded_wallpaper_24,
+                title = stringResource(R.string.unified_wallpaper_pick),
+                description = stringResource(R.string.unified_wallpaper_desc),
+                isChecked = false,
+                onCheckedChange = {},
+                showToggle = false,
+                onClick = {
+                    HapticUtil.performVirtualKeyHaptic(view)
+                    unifiedPickerLauncher.launch("image/*")
+                },
+            )
+        }
+
+        RoundedCardContainer {
+            IconToggleItem(
+                iconRes = R.drawable.rounded_home_24,
+                title = stringResource(R.string.unified_wallpaper_apply_home),
+                description = null,
+                isChecked = viewModel.unifiedWallpaperApplyHome.value,
+                onCheckedChange = { viewModel.setUnifiedWallpaperApplyHome(it, context) },
+            )
+            IconToggleItem(
+                iconRes = R.drawable.rounded_lock_24,
+                title = stringResource(R.string.unified_wallpaper_apply_lock),
+                description = null,
+                isChecked = viewModel.unifiedWallpaperApplyLock.value,
+                onCheckedChange = { viewModel.setUnifiedWallpaperApplyLock(it, context) },
+            )
+            IconToggleItem(
+                iconRes = R.drawable.rounded_visibility_off_24,
+                title = stringResource(R.string.unified_wallpaper_apply_aod),
+                description = null,
+                isChecked = viewModel.unifiedWallpaperApplyAod.value,
+                onCheckedChange = { viewModel.setUnifiedWallpaperApplyAod(it, context) },
+            )
+        }
+
+        RoundedCardContainer {
+            IconToggleItem(
+                iconRes = R.drawable.rounded_blur_on_24,
+                title = stringResource(R.string.unified_wallpaper_blur_home),
+                description = stringResource(R.string.unified_wallpaper_blur_home_desc),
+                isChecked = viewModel.unifiedWallpaperBlurHome.value,
+                onCheckedChange = { viewModel.setUnifiedWallpaperBlurHome(it, context) },
+            )
+            AnimatedVisibility(visible = viewModel.unifiedWallpaperBlurHome.value) {
+                IconToggleItem(
+                    iconRes = R.drawable.rounded_wallpaper_24,
+                    title = stringResource(R.string.unified_wallpaper_set_live),
+                    description = null,
+                    isChecked = false,
+                    onCheckedChange = {},
+                    showToggle = false,
+                    onClick = {
+                        HapticUtil.performVirtualKeyHaptic(view)
+                        viewModel.openUnifiedWallpaperPicker(context)
+                    },
+                )
+            }
+        }
+
+        Text(
             text = stringResource(R.string.feat_aod_wallpaper_section_title),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(start = 16.dp, top = 8.dp),

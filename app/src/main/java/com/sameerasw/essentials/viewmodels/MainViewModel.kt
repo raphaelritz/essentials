@@ -222,6 +222,11 @@ class MainViewModel : ViewModel() {
     val lockScreenClockHidden = mutableStateOf(false)
     val lockScreenClockSingleLine = mutableStateOf(false)
     val lockScreenWeatherHidden = mutableStateOf(false)
+    val unifiedWallpaperApplyHome = mutableStateOf(true)
+    val unifiedWallpaperApplyLock = mutableStateOf(true)
+    val unifiedWallpaperApplyAod = mutableStateOf(true)
+    val unifiedWallpaperBlurHome = mutableStateOf(false)
+    val isUnifiedWallpaperApplying = mutableStateOf(false)
 
     // Live Wallpaper
     val liveWallpaperSelectedVideo = mutableStateOf(SettingsRepository.LIVE_WALLPAPER_DEFAULT_VIDEO)
@@ -1285,6 +1290,10 @@ class MainViewModel : ViewModel() {
         lockScreenClockHidden.value = settingsRepository.getLockScreenClockHidden()
         lockScreenClockSingleLine.value = settingsRepository.getLockScreenClockSingleLine()
         lockScreenWeatherHidden.value = settingsRepository.getLockScreenWeatherHidden()
+        unifiedWallpaperApplyHome.value = settingsRepository.getUnifiedWallpaperApplyHome()
+        unifiedWallpaperApplyLock.value = settingsRepository.getUnifiedWallpaperApplyLock()
+        unifiedWallpaperApplyAod.value = settingsRepository.getUnifiedWallpaperApplyAod()
+        unifiedWallpaperBlurHome.value = settingsRepository.getUnifiedWallpaperBlurHome()
         loadShutUpConfigs()
         recentSearches.value = settingsRepository.getRecentSearches()
         loadCachedWallpaper()
@@ -3891,6 +3900,197 @@ class MainViewModel : ViewModel() {
      * @param hidden [Boolean] Whether the weather should be hidden.
      * @param context [Context] Target context.
      */
+    /**
+     * Applies one picked image across the home screen, lock screen and always-on display.
+     *
+     * The pristine image is kept in app storage and every surface is derived from it, so changing
+     * the blur later never compounds and the original is never lost. The home screen blur is drawn
+     * live by [com.sameerasw.essentials.services.UnifiedWallpaperService]; the system has no way to
+     * blur a static wallpaper, so the home screen only gets blur once that wallpaper is set.
+     *
+     * @param context [Context] Target context.
+     * @param uri [android.net.Uri] The picked image.
+     */
+    fun applyUnifiedWallpaper(
+        context: Context,
+        uri: android.net.Uri,
+    ) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            isUnifiedWallpaperApplying.value = true
+            var ok = false
+            try {
+                val source = decodeForWallpaper(context, uri)
+                if (source != null) {
+                    // Keep the pristine copy first: everything else re-derives from it.
+                    com.sameerasw.essentials.services.UnifiedWallpaperService
+                        .sourceFile(context)
+                        .outputStream()
+                        .use { out ->
+                            source.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
+                        }
+
+                    if (unifiedWallpaperApplyAod.value) {
+                        java.io.File(context.filesDir, "custom_aod_wallpaper.png")
+                            .outputStream()
+                            .use { out ->
+                                source.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                            }
+                        settingsRepository.setAodWallpaperCustomImage(true)
+                    }
+
+                    val manager = android.app.WallpaperManager.getInstance(context)
+                    if (unifiedWallpaperApplyLock.value) {
+                        // The lock screen stays sharp: its blur would not be adjustable anyway.
+                        manager.setBitmap(source, null, true, android.app.WallpaperManager.FLAG_LOCK)
+                    }
+                    if (unifiedWallpaperApplyHome.value && !unifiedWallpaperBlurHome.value) {
+                        // Without home blur there is no reason to take over the wallpaper engine.
+                        manager.setBitmap(source, null, true, android.app.WallpaperManager.FLAG_SYSTEM)
+                    }
+
+                    // Bump last: it is what wakes the live engine and the AOD overlay.
+                    settingsRepository.bumpUnifiedWallpaperSourceId()
+                    ok = true
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                isUnifiedWallpaperApplying.value = false
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    Toast
+                        .makeText(
+                            context,
+                            context.getString(
+                                if (ok) R.string.unified_wallpaper_applied else R.string.unified_wallpaper_failed,
+                            ),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                }
+            }
+        }
+    }
+
+    /**
+     * Decodes a picked image down to at most the display's longest edge, which keeps a 100MP photo
+     * from taking the process down.
+     *
+     * @param context [Context] Target context.
+     * @param uri [android.net.Uri] The picked image.
+     * @return The decoded bitmap, or null.
+     */
+    private fun decodeForWallpaper(
+        context: Context,
+        uri: android.net.Uri,
+    ): android.graphics.Bitmap? {
+        val metrics = context.resources.displayMetrics
+        val target = maxOf(metrics.widthPixels, metrics.heightPixels) * 2
+
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use {
+            android.graphics.BitmapFactory.decodeStream(it, null, bounds)
+        }
+        if (bounds.outWidth <= 0) return null
+
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) >= target || bounds.outHeight / (sample * 2) >= target) {
+            sample *= 2
+        }
+
+        return context.contentResolver.openInputStream(uri)?.use {
+            android.graphics.BitmapFactory.decodeStream(
+                it,
+                null,
+                android.graphics.BitmapFactory.Options().apply {
+                    inSampleSize = sample
+                    inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+                },
+            )
+        }
+    }
+
+    /**
+     * Sets whether the home screen shares the always-on display blur.
+     *
+     * @param value [Boolean] Target value.
+     * @param context [Context] Target context.
+     */
+    fun setUnifiedWallpaperBlurHome(
+        value: Boolean,
+        context: Context,
+    ) {
+        unifiedWallpaperBlurHome.value = value
+        settingsRepository.setUnifiedWallpaperBlurHome(value)
+    }
+
+    /**
+     * Sets whether a unified wallpaper pick applies to the home screen.
+     *
+     * @param value [Boolean] Target value.
+     * @param context [Context] Target context.
+     */
+    fun setUnifiedWallpaperApplyHome(
+        value: Boolean,
+        context: Context,
+    ) {
+        unifiedWallpaperApplyHome.value = value
+        settingsRepository.setUnifiedWallpaperApplyHome(value)
+    }
+
+    /**
+     * Sets whether a unified wallpaper pick applies to the lock screen.
+     *
+     * @param value [Boolean] Target value.
+     * @param context [Context] Target context.
+     */
+    fun setUnifiedWallpaperApplyLock(
+        value: Boolean,
+        context: Context,
+    ) {
+        unifiedWallpaperApplyLock.value = value
+        settingsRepository.setUnifiedWallpaperApplyLock(value)
+    }
+
+    /**
+     * Sets whether a unified wallpaper pick applies to the always-on display.
+     *
+     * @param value [Boolean] Target value.
+     * @param context [Context] Target context.
+     */
+    fun setUnifiedWallpaperApplyAod(
+        value: Boolean,
+        context: Context,
+    ) {
+        unifiedWallpaperApplyAod.value = value
+        settingsRepository.setUnifiedWallpaperApplyAod(value)
+    }
+
+    /**
+     * Opens the system live-wallpaper preview for Essentials' own wallpaper, which is how the home
+     * screen blur gets drawn. Setting a live wallpaper component silently needs a system
+     * permission, so the user confirms it here and can choose home-screen-only.
+     *
+     * @param context [Context] Target context.
+     */
+    fun openUnifiedWallpaperPicker(context: Context) {
+        try {
+            val intent =
+                Intent(android.app.WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+                    putExtra(
+                        android.app.WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                        android.content.ComponentName(
+                            context,
+                            com.sameerasw.essentials.services.UnifiedWallpaperService::class.java,
+                        ),
+                    )
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(context, R.string.unified_wallpaper_failed, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun setLockScreenWeatherHidden(
         hidden: Boolean,
         context: Context,
