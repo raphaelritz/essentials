@@ -11,6 +11,8 @@ package com.sameerasw.essentials.services.widgets
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,6 +21,7 @@ import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalSize
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.AndroidRemoteViews
@@ -46,6 +49,26 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+/**
+ * Records the searchbar's measured size for [WidgetScraperService].
+ *
+ * Wrapped in a [SideEffect] so the write happens after a successful composition rather than during
+ * one, and [SettingsRepository.setPixelSearchbarWidgetHostSize] ignores an unchanged size, so a
+ * re-render does not loop the service back through a rebind.
+ */
+@Composable
+private fun ReportHostSize(
+    settingsRepository: SettingsRepository,
+    widthDp: Int,
+    heightDp: Int,
+) {
+    SideEffect {
+        if (widthDp > 0 && heightDp > 0) {
+            settingsRepository.setPixelSearchbarWidgetHostSize(widthDp, heightDp)
+        }
+    }
+}
 
 class PixelSearchbarWidget : GlanceAppWidget() {
     override val sizeMode = androidx.glance.appwidget.SizeMode.Exact
@@ -94,6 +117,19 @@ class PixelSearchbarWidget : GlanceAppWidget() {
                                 GlanceModifier
                             },
                         )
+
+                if (type == "widget") {
+                    // The scraper hosts the chosen widget off-screen, where it has no size of its
+                    // own. This is the only point where the real searchbar dimensions are known, so
+                    // publish them; the service picks the change up and re-advertises them to the
+                    // provider. Padding is excluded since the scraped layout renders inside it.
+                    val size = LocalSize.current
+                    ReportHostSize(
+                        settingsRepository = settingsRepository,
+                        widthDp = (size.width - paddingH * 2).value.toInt(),
+                        heightDp = (size.height - paddingV * 2).value.toInt(),
+                    )
+                }
 
                 when (type) {
                     "empty" -> {

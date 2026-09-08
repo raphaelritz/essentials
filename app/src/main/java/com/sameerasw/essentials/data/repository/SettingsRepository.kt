@@ -387,6 +387,8 @@ class SettingsRepository(
         const val KEY_PIXEL_SEARCHBAR_WIDGET_PADDING_V = "pixel_searchbar_widget_padding_v"
         const val KEY_PIXEL_SEARCHBAR_TAP_ACTION_ENABLED = "pixel_searchbar_tap_action_enabled"
         const val KEY_PIXEL_SEARCHBAR_WIDGET_REVISION = "pixel_searchbar_widget_revision"
+        const val KEY_PIXEL_SEARCHBAR_WIDGET_HOST_WIDTH = "pixel_searchbar_widget_host_width"
+        const val KEY_PIXEL_SEARCHBAR_WIDGET_HOST_HEIGHT = "pixel_searchbar_widget_host_height"
         const val KEY_PIXEL_SEARCHBAR_MUSIC_TITLE = "pixel_searchbar_music_title"
         const val KEY_PIXEL_SEARCHBAR_MUSIC_ARTIST = "pixel_searchbar_music_artist"
         const val KEY_PIXEL_SEARCHBAR_MUSIC_PACKAGE = "pixel_searchbar_music_package"
@@ -1865,6 +1867,47 @@ class SettingsRepository(
      * @return The resulting Int data.
      */
     fun getPixelSearchbarWidgetRevision(): Int = prefs.getInt(KEY_PIXEL_SEARCHBAR_WIDGET_REVISION, 0)
+
+    /**
+     * Executes the get pixel searchbar widget host width operation.
+     *
+     * The width in dp of the Glance host widget that replays the scraped widget, measured at
+     * render time. Zero means it has not been measured yet.
+     *
+     * @return The resulting Int data.
+     */
+    fun getPixelSearchbarWidgetHostWidth(): Int = prefs.getInt(KEY_PIXEL_SEARCHBAR_WIDGET_HOST_WIDTH, 0)
+
+    /**
+     * Executes the get pixel searchbar widget host height operation.
+     *
+     * The height in dp of the Glance host widget that replays the scraped widget, measured at
+     * render time. Zero means it has not been measured yet.
+     *
+     * @return The resulting Int data.
+     */
+    fun getPixelSearchbarWidgetHostHeight(): Int = prefs.getInt(KEY_PIXEL_SEARCHBAR_WIDGET_HOST_HEIGHT, 0)
+
+    /**
+     * Stores the measured size of the Glance host widget so the scraper can advertise the same
+     * size to the widget it hosts.
+     *
+     * @param width [Int] Target width in dp.
+     * @param height [Int] Target height in dp.
+     * @return True when the stored size changed.
+     */
+    fun setPixelSearchbarWidgetHostSize(
+        width: Int,
+        height: Int,
+    ): Boolean {
+        if (getPixelSearchbarWidgetHostWidth() == width && getPixelSearchbarWidgetHostHeight() == height) return false
+        prefs
+            .edit()
+            .putInt(KEY_PIXEL_SEARCHBAR_WIDGET_HOST_WIDTH, width)
+            .putInt(KEY_PIXEL_SEARCHBAR_WIDGET_HOST_HEIGHT, height)
+            .apply()
+        return true
+    }
 
     /**
      * Executes the increment pixel searchbar widget revision operation.

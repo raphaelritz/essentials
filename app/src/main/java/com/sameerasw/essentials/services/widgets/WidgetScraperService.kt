@@ -17,14 +17,18 @@ import android.appwidget.AppWidgetProviderInfo
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.SizeF
 import android.view.View
 import android.view.ViewTreeObserver
 import android.widget.RemoteViews
@@ -102,6 +106,15 @@ class WidgetScraperService : Service() {
     companion object {
         const val HOST_ID = 1025
 
+        /** Fallback searchbar height in dp, used until the Glance widget reports its real size. */
+        private const val FALLBACK_HEIGHT_DP = 56
+
+        /** Fallback horizontal inset in dp applied to the screen width for the same reason. */
+        private const val FALLBACK_HORIZONTAL_INSET_DP = 32
+
+        /** Floor for the advertised width, so we never advertise a degenerate size. */
+        private const val MIN_ADVERTISED_WIDTH_DP = 64
+
         @Volatile
         var currentRemoteViews: RemoteViews? = null
             private set
@@ -118,7 +131,28 @@ class WidgetScraperService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var settingsRepository: SettingsRepository
     private var appWidgetHost: ScrapingWidgetHost? = null
+    private var hostView: AppWidgetHostView? = null
     private val handler = Handler(Looper.getMainLooper())
+
+    /**
+     * The most recent RemoteViews exactly as the provider sent it, kept so the correct variant can
+     * be re-resolved when the searchbar size changes without waiting for the next provider update.
+     */
+    private var rawRemoteViews: RemoteViews? = null
+
+    /**
+     * The Glance widget records its measured size as it renders; that is the only place the real
+     * searchbar dimensions are known. Picking the change up here avoids starting the service from
+     * a background render pass.
+     */
+    private val hostSizeListener =
+        SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == SettingsRepository.KEY_PIXEL_SEARCHBAR_WIDGET_HOST_WIDTH ||
+                key == SettingsRepository.KEY_PIXEL_SEARCHBAR_WIDGET_HOST_HEIGHT
+            ) {
+                handler.post { onHostSizeChanged() }
+            }
+        }
 
     // Music playback tracking components
     private var mediaSessionManager: MediaSessionManager? = null
@@ -144,6 +178,7 @@ class WidgetScraperService : Service() {
     override fun onCreate() {
         super.onCreate()
         settingsRepository = SettingsRepository(this)
+        settingsRepository.registerOnSharedPreferenceChangeListener(hostSizeListener)
     }
 
     override fun onStartCommand(
@@ -166,6 +201,10 @@ class WidgetScraperService : Service() {
         // Clear any media components
         cleanupMediaListener()
 
+        // Repeated starts would otherwise leak the previous host; keep the last scrape so the
+        // searchbar does not blink back to the placeholder while rebinding.
+        releaseWidgetHost()
+
         val widgetId = settingsRepository.getPixelSearchbarWidgetId()
         if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             stopSelf()
@@ -183,7 +222,120 @@ class WidgetScraperService : Service() {
                 return
             }
 
-        handler.post { host.createView(this, widgetId, info) }
+        handler.post {
+            val view = host.createView(this, widgetId, info)
+            hostView = view
+            applyHostSize(view, widgetId)
+        }
+    }
+
+    /**
+     * Returns the size the scraped widget is actually drawn at, in dp.
+     *
+     * The Glance widget publishes its measured size as it renders. Until that has happened once,
+     * fall back to a searchbar-shaped estimate rather than to zero.
+     */
+    private fun hostSizeDp(): Pair<Int, Int> {
+        val storedWidth = settingsRepository.getPixelSearchbarWidgetHostWidth()
+        val storedHeight = settingsRepository.getPixelSearchbarWidgetHostHeight()
+        if (storedWidth > 0 && storedHeight > 0) return storedWidth to storedHeight
+
+        val metrics = resources.displayMetrics
+        val screenWidthDp = (metrics.widthPixels / metrics.density).toInt()
+        val width = (screenWidthDp - FALLBACK_HORIZONTAL_INSET_DP).coerceAtLeast(MIN_ADVERTISED_WIDTH_DP)
+        return width to FALLBACK_HEIGHT_DP
+    }
+
+    /**
+     * Tells the hosted widget how much room it has.
+     *
+     * The widget is bound by the picker and then hosted off-screen, so without this its options
+     * bundle stays empty and every size-aware provider reads a width and height of zero. They then
+     * send back their most collapsed layout — Firefox answers with its icon-only variant, and
+     * providers that build sized RemoteViews emit their smallest one.
+     *
+     * A single exact size is advertised on purpose: a provider that keys its RemoteViews by the
+     * host's advertised sizes then produces exactly one variant, which is what the nested-RemoteViews
+     * replay in the Glance widget can actually render.
+     */
+    private fun applyHostSize(
+        view: AppWidgetHostView,
+        widgetId: Int,
+    ) {
+        val (widthDp, heightDp) = hostSizeDp()
+        val options =
+            Bundle().apply {
+                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, widthDp)
+                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, widthDp)
+                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, heightDp)
+                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, heightDp)
+                putInt(
+                    AppWidgetManager.OPTION_APPWIDGET_HOST_CATEGORY,
+                    AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN,
+                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    putParcelableArrayList(
+                        AppWidgetManager.OPTION_APPWIDGET_SIZES,
+                        arrayListOf(SizeF(widthDp.toFloat(), heightDp.toFloat())),
+                    )
+                }
+            }
+
+        // Updating the options makes the provider push a fresh, correctly sized update.
+        runCatching { AppWidgetManager.getInstance(this).updateAppWidgetOptions(widgetId, options) }
+
+        // The host view is never attached to a window, so it has no size of its own to report.
+        runCatching { view.updateAppWidgetSize(options, widthDp, heightDp, widthDp, heightDp) }
+
+        val density = resources.displayMetrics.density
+        val widthPx = (widthDp * density).toInt()
+        val heightPx = (heightDp * density).toInt()
+        runCatching {
+            view.measure(
+                View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY),
+            )
+            view.layout(0, 0, widthPx, heightPx)
+        }
+    }
+
+    /**
+     * Re-advertises the size after the Glance widget reports a new measurement, and re-resolves the
+     * layout already in hand so the searchbar corrects itself without waiting for the provider.
+     */
+    private fun onHostSizeChanged() {
+        if (settingsRepository.getPixelSearchbarType() != "widget") return
+        val view = hostView ?: return
+        applyHostSize(view, settingsRepository.getPixelSearchbarWidgetId())
+        rawRemoteViews?.let {
+            currentRemoteViews = resolveForHostSize(it)
+            notifyWidgetChanged()
+        }
+    }
+
+    /**
+     * Picks the variant of [remoteViews] matching the space the searchbar actually has.
+     *
+     * A provider may answer with a RemoteViews carrying several layouts — a landscape/portrait pair,
+     * or a map keyed by size. The Glance widget nests whatever it is handed, and a nested RemoteViews
+     * is applied without size information, so the framework falls back to the first variant, which is
+     * the smallest. Resolving here hands the launcher a single, correctly sized layout instead.
+     *
+     * There is no public API for this, so it degrades to the original RemoteViews when unavailable —
+     * no worse than not trying.
+     */
+    private fun resolveForHostSize(remoteViews: RemoteViews): RemoteViews {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return remoteViews
+        val (widthDp, heightDp) = hostSizeDp()
+        return runCatching {
+            val method =
+                RemoteViews::class.java.getMethod(
+                    "getRemoteViewsToApply",
+                    Context::class.java,
+                    SizeF::class.java,
+                )
+            method.invoke(remoteViews, this, SizeF(widthDp.toFloat(), heightDp.toFloat())) as? RemoteViews
+        }.getOrNull() ?: remoteViews
     }
 
     private fun listenToMusicSession() {
@@ -285,7 +437,8 @@ class WidgetScraperService : Service() {
     }
 
     private fun onRemoteViewsReceived(remoteViews: RemoteViews) {
-        currentRemoteViews = remoteViews
+        rawRemoteViews = remoteViews
+        currentRemoteViews = resolveForHostSize(remoteViews)
         notifyWidgetChanged()
     }
 
@@ -311,9 +464,16 @@ class WidgetScraperService : Service() {
         }, 100L)
     }
 
-    private fun cleanupWidgetListener() {
+    /** Tears the host down but keeps the last scrape, for rebinding without a visible gap. */
+    private fun releaseWidgetHost() {
         appWidgetHost?.stopListening()
         appWidgetHost = null
+        hostView = null
+    }
+
+    private fun cleanupWidgetListener() {
+        releaseWidgetHost()
+        rawRemoteViews = null
         currentRemoteViews = null
     }
 
@@ -337,6 +497,7 @@ class WidgetScraperService : Service() {
     }
 
     override fun onDestroy() {
+        settingsRepository.unregisterOnSharedPreferenceChangeListener(hostSizeListener)
         handler.removeCallbacksAndMessages(null)
         cleanupWidgetListener()
         cleanupMediaListener()
