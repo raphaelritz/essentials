@@ -89,8 +89,8 @@ android {
         applicationId = "com.sameerasw.essentials"
         minSdk = 26
         targetSdk = 37
-        versionCode = 65
-        versionName = "18.0-beta.1-clock-hide"
+        versionCode = 66
+        versionName = "18.0-beta.1-clock-hide2"
 
         val whatsNewCounter = 2
         buildConfigField("int", "WHATS_NEW_COUNTER", whatsNewCounter.toString())

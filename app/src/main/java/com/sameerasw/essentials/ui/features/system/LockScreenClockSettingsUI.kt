@@ -369,6 +369,16 @@ fun LockScreenClockSettingsUI(
             )
         }
 
+        RoundedCardContainer {
+            IconToggleItem(
+                iconRes = R.drawable.rounded_visibility_off_24,
+                title = stringResource(R.string.lock_screen_weather_title),
+                description = stringResource(R.string.lock_screen_weather_desc),
+                isChecked = viewModel.lockScreenWeatherHidden.value,
+                onCheckedChange = { viewModel.setLockScreenWeatherHidden(it, context) },
+            )
+        }
+
         // About Section
         RoundedCardContainer {
             IconToggleItem(

@@ -221,6 +221,7 @@ class MainViewModel : ViewModel() {
     val lockScreenClockSeedColor = mutableIntStateOf(0)
     val lockScreenClockHidden = mutableStateOf(false)
     val lockScreenClockSingleLine = mutableStateOf(false)
+    val lockScreenWeatherHidden = mutableStateOf(false)
 
     // Live Wallpaper
     val liveWallpaperSelectedVideo = mutableStateOf(SettingsRepository.LIVE_WALLPAPER_DEFAULT_VIDEO)
@@ -1283,6 +1284,7 @@ class MainViewModel : ViewModel() {
         lockScreenClockSeedColor.intValue = settingsRepository.getLockScreenClockSeedColor()
         lockScreenClockHidden.value = settingsRepository.getLockScreenClockHidden()
         lockScreenClockSingleLine.value = settingsRepository.getLockScreenClockSingleLine()
+        lockScreenWeatherHidden.value = settingsRepository.getLockScreenWeatherHidden()
         loadShutUpConfigs()
         recentSearches.value = settingsRepository.getRecentSearches()
         loadCachedWallpaper()
@@ -3782,22 +3784,35 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 val type = settingsRepository.getPixelSearchbarType()
-                if (type == "widget") {
-                    // Force the size handshake to run again on the next render.
-                    settingsRepository.setPixelSearchbarWidgetHostSize(0, 0)
-                }
+
                 if (type == "widget" || type == "music") {
+                    // Stop before starting. Starting an already-running service does re-run
+                    // onStartCommand, but the teardown is what actually forces a clean rebind —
+                    // it is the step the style-away-and-back workaround performs.
+                    com.sameerasw.essentials.services.widgets.WidgetScraperService
+                        .stop(context)
+                    kotlinx.coroutines.delay(SERVICE_RESTART_DELAY_MS)
+                    if (type == "widget") {
+                        // Make the next render republish its measured size.
+                        settingsRepository.setPixelSearchbarWidgetHostSize(0, 0)
+                    }
                     com.sameerasw.essentials.services.widgets.WidgetScraperService
                         .start(context)
                 }
 
                 updatePixelSearchbarWidget(context)
 
-                val forceStopCommand = "am force-stop com.google.android.apps.nexuslauncher"
-                if (ShizukuUtils.hasPermission()) {
-                    ShizukuUtils.runCommand(forceStopCommand)
-                } else if (RootUtils.isRootPermissionGranted()) {
-                    RootUtils.runCommand(forceStopCommand)
+                // Re-assert the secure setting and restart the launcher through the same path that
+                // enabling the feature uses, rather than a hand-rolled force-stop.
+                applyPixelSearchbarSetting(context, isPixelSearchbarEnabled.value)
+
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    Toast
+                        .makeText(
+                            context,
+                            context.getString(R.string.pixel_searchbar_refresh_done),
+                            Toast.LENGTH_SHORT,
+                        ).show()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -3826,6 +3841,8 @@ class MainViewModel : ViewModel() {
     /**
      * Fully transparent white (alpha 0). Non-zero so it is not mistaken for "unset".
      */
+    private val SERVICE_RESTART_DELAY_MS = 350L
+
     private val TRANSPARENT_SEED_COLOR = 0x00FFFFFF
 
     /**
@@ -3854,6 +3871,41 @@ class MainViewModel : ViewModel() {
      * @param singleLine [Boolean] Whether to force the single-line clock.
      * @param context [Context] Target context.
      */
+    /**
+     * Hides or restores the lock screen weather via lockscreen_weather_enabled.
+     *
+     * This is the only smartspace element Android exposes a switch for; the date beside it is
+     * built unconditionally and has no equivalent setting.
+     *
+     * @param hidden [Boolean] Whether the weather should be hidden.
+     * @param context [Context] Target context.
+     */
+    fun setLockScreenWeatherHidden(
+        hidden: Boolean,
+        context: Context,
+    ) {
+        lockScreenWeatherHidden.value = hidden
+        settingsRepository.setLockScreenWeatherHidden(hidden)
+
+        val key = "lockscreen_weather_enabled"
+        val value = if (hidden) 0 else 1
+        var success = false
+        if (PermissionUtils.canWriteSecureSettings(context)) {
+            success =
+                runCatching {
+                    Settings.Secure.putInt(context.contentResolver, key, value)
+                }.getOrDefault(false)
+        }
+        if (!success) {
+            val command = "settings put secure $key $value"
+            if (ShizukuUtils.hasPermission()) {
+                ShizukuUtils.runCommand(command)
+            } else if (RootUtils.isRootPermissionGranted()) {
+                RootUtils.runCommand(command)
+            }
+        }
+    }
+
     fun setLockScreenClockSingleLine(
         singleLine: Boolean,
         context: Context,
