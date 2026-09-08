@@ -346,16 +346,16 @@ class WidgetScraperService : Service() {
         val (widthDp, heightDp) = hostSizeDp()
         val resolved =
             try {
-                // getDeclaredMethod, not getMethod: this method is not public, so getMethod never
-                // finds it. The app exempts hidden-API access in EssentialsApp.onCreate.
-                val method =
-                    RemoteViews::class.java
-                        .getDeclaredMethod(
-                            "getRemoteViewsToApply",
-                            Context::class.java,
-                            SizeF::class.java,
-                        ).apply { isAccessible = true }
-                method.invoke(remoteViews, this, SizeF(widthDp.toFloat(), heightDp.toFloat())) as? RemoteViews
+                // getRemoteViewsToApply is a blocked non-SDK method, so plain reflection is both
+                // refused by the platform and flagged by lint. Go through HiddenApiBypass, which
+                // the app already initialises in EssentialsApp.onCreate and uses elsewhere.
+                org.lsposed.hiddenapibypass.HiddenApiBypass.invoke(
+                    RemoteViews::class.java,
+                    remoteViews,
+                    "getRemoteViewsToApply",
+                    this,
+                    SizeF(widthDp.toFloat(), heightDp.toFloat()),
+                ) as? RemoteViews
             } catch (t: Throwable) {
                 Log.w(TAG, "RemoteViews variant resolution unavailable; replaying as sent", t)
                 null
