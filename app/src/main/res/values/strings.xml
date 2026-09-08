@@ -2190,6 +2190,10 @@
     <string name="pixel_searchbar_scraped_line2">Scraped subtitle</string>
     <string name="pixel_searchbar_widget_padding_h">Horizontal padding</string>
     <string name="pixel_searchbar_widget_padding_v">Vertical padding</string>
+    <string name="pixel_searchbar_widget_width_override">Widget width (0 = auto)</string>
+    <string name="pixel_searchbar_widget_height_override">Widget height (0 = auto)</string>
+    <string name="pixel_searchbar_refresh_title">Re-apply searchbar</string>
+    <string name="pixel_searchbar_refresh_desc">Re-scrape the widget and restart the launcher so changes take effect</string>
     <string name="pixel_searchbar_tap_action_enabled">Custom tap action</string>
     <string name="pixel_searchbar_tap_action_enabled_desc">Use DIY tap action instead of widget\'s own</string>
     <string name="pixel_searchbar_style_music">Music</string>

@@ -36,7 +36,9 @@ import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.ContentScale
 import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
@@ -64,8 +66,11 @@ private fun ReportHostSize(
     heightDp: Int,
 ) {
     SideEffect {
-        if (widthDp > 0 && heightDp > 0) {
-            settingsRepository.setPixelSearchbarWidgetHostSize(widthDp, heightDp)
+        // A zero axis means "overridden" — keep whatever is stored for it.
+        val width = if (widthDp > 0) widthDp else settingsRepository.getPixelSearchbarWidgetHostWidth()
+        val height = if (heightDp > 0) heightDp else settingsRepository.getPixelSearchbarWidgetHostHeight()
+        if (width > 0 && height > 0) {
+            settingsRepository.setPixelSearchbarWidgetHostSize(width, height)
         }
     }
 }
@@ -82,6 +87,8 @@ class PixelSearchbarWidget : GlanceAppWidget() {
         val tapActionEnabled = settingsRepository.getPixelSearchbarTapActionEnabled()
         val paddingH = settingsRepository.getPixelSearchbarWidgetPaddingH().dp
         val paddingV = settingsRepository.getPixelSearchbarWidgetPaddingV().dp
+        val widthOverride = settingsRepository.getPixelSearchbarWidgetWidthOverride()
+        val heightOverride = settingsRepository.getPixelSearchbarWidgetHeightOverride()
         val revision = settingsRepository.getPixelSearchbarWidgetRevision()
 
         val musicBitmap =
@@ -96,11 +103,15 @@ class PixelSearchbarWidget : GlanceAppWidget() {
                 null
             }
 
+        // In widget mode the scraped widget carries its own click targets, so only claim taps when
+        // the user actually asked for the DIY action. Both branches used to return an action, which
+        // made the null check below dead and let this swallow every tap the widget did not handle.
         val globalTapAction =
-            if (tapActionEnabled) {
-                actionStartActivity(com.sameerasw.essentials.ui.activities.PixelSearchbarTapActivity::class.java)
-            } else {
-                actionStartActivity(PixelSearchResultsActivity::class.java)
+            when {
+                tapActionEnabled ->
+                    actionStartActivity(com.sameerasw.essentials.ui.activities.PixelSearchbarTapActivity::class.java)
+                type == "widget" -> null
+                else -> actionStartActivity(PixelSearchResultsActivity::class.java)
             }
 
         provideContent {
@@ -126,8 +137,8 @@ class PixelSearchbarWidget : GlanceAppWidget() {
                     val size = LocalSize.current
                     ReportHostSize(
                         settingsRepository = settingsRepository,
-                        widthDp = (size.width - paddingH * 2).value.toInt(),
-                        heightDp = (size.height - paddingV * 2).value.toInt(),
+                        widthDp = if (widthOverride > 0) 0 else (size.width - paddingH * 2).value.toInt(),
+                        heightDp = if (heightOverride > 0) 0 else (size.height - paddingV * 2).value.toInt(),
                     )
                 }
 
@@ -145,9 +156,14 @@ class PixelSearchbarWidget : GlanceAppWidget() {
                             contentAlignment = Alignment.Center,
                         ) {
                             if (remoteViews != null) {
+                                // An override pins the drawn size; advertising a smaller size to the
+                                // provider only changes what it sends, not how wide it ends up here.
+                                var rvModifier = GlanceModifier.fillMaxSize()
+                                if (widthOverride > 0) rvModifier = rvModifier.width(widthOverride.dp)
+                                if (heightOverride > 0) rvModifier = rvModifier.height(heightOverride.dp)
                                 AndroidRemoteViews(
                                     remoteViews = remoteViews,
-                                    modifier = GlanceModifier.fillMaxSize(),
+                                    modifier = rvModifier,
                                 )
                             } else {
                                 Text(

@@ -28,6 +28,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import android.util.SizeF
 import android.view.View
 import android.view.ViewTreeObserver
@@ -106,6 +107,8 @@ class WidgetScraperService : Service() {
     companion object {
         const val HOST_ID = 1025
 
+        private const val TAG = "WidgetScraper"
+
         /** Fallback searchbar height in dp, used until the Glance widget reports its real size. */
         private const val FALLBACK_HEIGHT_DP = 56
 
@@ -148,7 +151,9 @@ class WidgetScraperService : Service() {
     private val hostSizeListener =
         SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == SettingsRepository.KEY_PIXEL_SEARCHBAR_WIDGET_HOST_WIDTH ||
-                key == SettingsRepository.KEY_PIXEL_SEARCHBAR_WIDGET_HOST_HEIGHT
+                key == SettingsRepository.KEY_PIXEL_SEARCHBAR_WIDGET_HOST_HEIGHT ||
+                key == SettingsRepository.KEY_PIXEL_SEARCHBAR_WIDGET_WIDTH_OVERRIDE ||
+                key == SettingsRepository.KEY_PIXEL_SEARCHBAR_WIDGET_HEIGHT_OVERRIDE
             ) {
                 handler.post { onHostSizeChanged() }
             }
@@ -212,21 +217,22 @@ class WidgetScraperService : Service() {
         }
 
         val awm = AppWidgetManager.getInstance(this)
-        val host = ScrapingWidgetHost(this, HOST_ID)
-        appWidgetHost = host
-        host.startListening()
-
         val info =
             awm.getAppWidgetInfo(widgetId) ?: run {
                 stopSelf()
                 return
             }
 
-        handler.post {
-            val view = host.createView(this, widgetId, info)
-            hostView = view
-            applyHostSize(view, widgetId)
-        }
+        val host = ScrapingWidgetHost(this, HOST_ID)
+        appWidgetHost = host
+
+        // Create and register the host view before listening starts. startListening replays the
+        // provider's cached views to views the host already knows about, so registering first
+        // removes any chance of missing that first snapshot.
+        val view = host.createView(this, widgetId, info)
+        hostView = view
+        host.startListening()
+        applyHostSize(view, widgetId)
     }
 
     /**
@@ -236,14 +242,25 @@ class WidgetScraperService : Service() {
      * fall back to a searchbar-shaped estimate rather than to zero.
      */
     private fun hostSizeDp(): Pair<Int, Int> {
-        val storedWidth = settingsRepository.getPixelSearchbarWidgetHostWidth()
-        val storedHeight = settingsRepository.getPixelSearchbarWidgetHostHeight()
-        if (storedWidth > 0 && storedHeight > 0) return storedWidth to storedHeight
-
         val metrics = resources.displayMetrics
         val screenWidthDp = (metrics.widthPixels / metrics.density).toInt()
-        val width = (screenWidthDp - FALLBACK_HORIZONTAL_INSET_DP).coerceAtLeast(MIN_ADVERTISED_WIDTH_DP)
-        return width to FALLBACK_HEIGHT_DP
+        val fallbackWidth = (screenWidthDp - FALLBACK_HORIZONTAL_INSET_DP).coerceAtLeast(MIN_ADVERTISED_WIDTH_DP)
+
+        // A manual override wins per axis, then the size the Glance widget measured, then a
+        // searchbar-shaped estimate for the render that has not happened yet.
+        val width =
+            settingsRepository
+                .getPixelSearchbarWidgetWidthOverride()
+                .takeIf { it > 0 }
+                ?: settingsRepository.getPixelSearchbarWidgetHostWidth().takeIf { it > 0 }
+                ?: fallbackWidth
+        val height =
+            settingsRepository
+                .getPixelSearchbarWidgetHeightOverride()
+                .takeIf { it > 0 }
+                ?: settingsRepository.getPixelSearchbarWidgetHostHeight().takeIf { it > 0 }
+                ?: FALLBACK_HEIGHT_DP
+        return width to height
     }
 
     /**
@@ -327,15 +344,31 @@ class WidgetScraperService : Service() {
     private fun resolveForHostSize(remoteViews: RemoteViews): RemoteViews {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return remoteViews
         val (widthDp, heightDp) = hostSizeDp()
-        return runCatching {
-            val method =
-                RemoteViews::class.java.getMethod(
-                    "getRemoteViewsToApply",
-                    Context::class.java,
-                    SizeF::class.java,
-                )
-            method.invoke(remoteViews, this, SizeF(widthDp.toFloat(), heightDp.toFloat())) as? RemoteViews
-        }.getOrNull() ?: remoteViews
+        val resolved =
+            try {
+                // getDeclaredMethod, not getMethod: this method is not public, so getMethod never
+                // finds it. The app exempts hidden-API access in EssentialsApp.onCreate.
+                val method =
+                    RemoteViews::class.java
+                        .getDeclaredMethod(
+                            "getRemoteViewsToApply",
+                            Context::class.java,
+                            SizeF::class.java,
+                        ).apply { isAccessible = true }
+                method.invoke(remoteViews, this, SizeF(widthDp.toFloat(), heightDp.toFloat())) as? RemoteViews
+            } catch (t: Throwable) {
+                Log.w(TAG, "RemoteViews variant resolution unavailable; replaying as sent", t)
+                null
+            } ?: return remoteViews
+
+        if (resolved === remoteViews) return remoteViews
+
+        // The returned variant is a child of a live hierarchy. Detach it with the copy constructor
+        // so nesting it in the Glance tree does not re-point the original's caches.
+        return runCatching { RemoteViews(resolved) }.getOrElse {
+            Log.w(TAG, "could not detach resolved variant; using it directly", it)
+            resolved
+        }
     }
 
     private fun listenToMusicSession() {
@@ -437,8 +470,11 @@ class WidgetScraperService : Service() {
     }
 
     private fun onRemoteViewsReceived(remoteViews: RemoteViews) {
-        rawRemoteViews = remoteViews
-        currentRemoteViews = resolveForHostSize(remoteViews)
+        // Keep our own copy: the host view retains this instance, and nesting it in a Glance tree
+        // mutates it in place (configureAsChild re-points its caches at the enclosing root).
+        val own = runCatching { RemoteViews(remoteViews) }.getOrDefault(remoteViews)
+        rawRemoteViews = own
+        currentRemoteViews = resolveForHostSize(own)
         notifyWidgetChanged()
     }
 

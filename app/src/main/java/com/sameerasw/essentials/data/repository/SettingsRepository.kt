@@ -389,6 +389,8 @@ class SettingsRepository(
         const val KEY_PIXEL_SEARCHBAR_WIDGET_REVISION = "pixel_searchbar_widget_revision"
         const val KEY_PIXEL_SEARCHBAR_WIDGET_HOST_WIDTH = "pixel_searchbar_widget_host_width"
         const val KEY_PIXEL_SEARCHBAR_WIDGET_HOST_HEIGHT = "pixel_searchbar_widget_host_height"
+        const val KEY_PIXEL_SEARCHBAR_WIDGET_WIDTH_OVERRIDE = "pixel_searchbar_widget_width_override"
+        const val KEY_PIXEL_SEARCHBAR_WIDGET_HEIGHT_OVERRIDE = "pixel_searchbar_widget_height_override"
         const val KEY_PIXEL_SEARCHBAR_MUSIC_TITLE = "pixel_searchbar_music_title"
         const val KEY_PIXEL_SEARCHBAR_MUSIC_ARTIST = "pixel_searchbar_music_artist"
         const val KEY_PIXEL_SEARCHBAR_MUSIC_PACKAGE = "pixel_searchbar_music_package"
@@ -1877,6 +1879,34 @@ class SettingsRepository(
      * @return The resulting Int data.
      */
     fun getPixelSearchbarWidgetHostWidth(): Int = prefs.getInt(KEY_PIXEL_SEARCHBAR_WIDGET_HOST_WIDTH, 0)
+
+    /**
+     * Manual width override in dp for the scraped widget, or 0 to use the measured size.
+     * @return The resulting Int data.
+     */
+    fun getPixelSearchbarWidgetWidthOverride(): Int = prefs.getInt(KEY_PIXEL_SEARCHBAR_WIDGET_WIDTH_OVERRIDE, 0)
+
+    /**
+     * Sets the manual width override in dp; 0 restores the measured size.
+     *
+     * @param value [Int] Target value.
+     */
+    fun setPixelSearchbarWidgetWidthOverride(value: Int) =
+        prefs.edit().putInt(KEY_PIXEL_SEARCHBAR_WIDGET_WIDTH_OVERRIDE, value).apply()
+
+    /**
+     * Manual height override in dp for the scraped widget, or 0 to use the measured size.
+     * @return The resulting Int data.
+     */
+    fun getPixelSearchbarWidgetHeightOverride(): Int = prefs.getInt(KEY_PIXEL_SEARCHBAR_WIDGET_HEIGHT_OVERRIDE, 0)
+
+    /**
+     * Sets the manual height override in dp; 0 restores the measured size.
+     *
+     * @param value [Int] Target value.
+     */
+    fun setPixelSearchbarWidgetHeightOverride(value: Int) =
+        prefs.edit().putInt(KEY_PIXEL_SEARCHBAR_WIDGET_HEIGHT_OVERRIDE, value).apply()
 
     /**
      * Executes the get pixel searchbar widget host height operation.

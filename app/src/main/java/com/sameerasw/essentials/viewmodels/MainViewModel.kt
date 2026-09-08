@@ -205,6 +205,8 @@ class MainViewModel : ViewModel() {
     val pixelSearchbarScrapedLine2 = mutableStateOf("")
     val pixelSearchbarWidgetPaddingH = mutableIntStateOf(0)
     val pixelSearchbarWidgetPaddingV = mutableIntStateOf(0)
+    val pixelSearchbarWidgetWidthOverride = mutableIntStateOf(0)
+    val pixelSearchbarWidgetHeightOverride = mutableIntStateOf(0)
     val pixelSearchbarTapActionEnabled = mutableStateOf(true)
     val pixelSearchbarMusicTitle = mutableStateOf("")
     val pixelSearchbarMusicArtist = mutableStateOf("")
@@ -1256,6 +1258,10 @@ class MainViewModel : ViewModel() {
             settingsRepository.getPixelSearchbarWidgetPaddingH()
         pixelSearchbarWidgetPaddingV.intValue =
             settingsRepository.getPixelSearchbarWidgetPaddingV()
+        pixelSearchbarWidgetWidthOverride.intValue =
+            settingsRepository.getPixelSearchbarWidgetWidthOverride()
+        pixelSearchbarWidgetHeightOverride.intValue =
+            settingsRepository.getPixelSearchbarWidgetHeightOverride()
         pixelSearchbarTapActionEnabled.value =
             settingsRepository.getPixelSearchbarTapActionEnabled()
         pixelSearchbarMusicTitle.value =
@@ -3560,6 +3566,36 @@ class MainViewModel : ViewModel() {
      * @param value [Int] Target value.
      * @param context [Context] Target context.
      */
+    /**
+     * Sets a manual width override in dp for the scraped widget; 0 restores the measured size.
+     *
+     * @param value [Int] Target value.
+     * @param context [Context] Target context.
+     */
+    fun setPixelSearchbarWidgetWidthOverride(
+        value: Int,
+        context: Context,
+    ) {
+        pixelSearchbarWidgetWidthOverride.intValue = value
+        settingsRepository.setPixelSearchbarWidgetWidthOverride(value)
+        updatePixelSearchbarWidget(context)
+    }
+
+    /**
+     * Sets a manual height override in dp for the scraped widget; 0 restores the measured size.
+     *
+     * @param value [Int] Target value.
+     * @param context [Context] Target context.
+     */
+    fun setPixelSearchbarWidgetHeightOverride(
+        value: Int,
+        context: Context,
+    ) {
+        pixelSearchbarWidgetHeightOverride.intValue = value
+        settingsRepository.setPixelSearchbarWidgetHeightOverride(value)
+        updatePixelSearchbarWidget(context)
+    }
+
     fun setPixelSearchbarWidgetPaddingH(
         value: Int,
         context: Context,
@@ -3729,6 +3765,42 @@ class MainViewModel : ViewModel() {
      *
      * @param context [Context] Target context.
      */
+    /**
+     * Re-applies every layer of the searchbar replacement in one action, so a settings change takes
+     * effect without switching the style away and back.
+     *
+     * Order matters: re-scrape and refresh the Glance widget first, then restart the launcher last,
+     * so it comes back up to already-fresh content.
+     *
+     * @param context [Context] Target context.
+     */
+    fun refreshPixelSearchbar(context: Context) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val type = settingsRepository.getPixelSearchbarType()
+                if (type == "widget") {
+                    // Force the size handshake to run again on the next render.
+                    settingsRepository.setPixelSearchbarWidgetHostSize(0, 0)
+                }
+                if (type == "widget" || type == "music") {
+                    com.sameerasw.essentials.services.widgets.WidgetScraperService
+                        .start(context)
+                }
+
+                updatePixelSearchbarWidget(context)
+
+                val forceStopCommand = "am force-stop com.google.android.apps.nexuslauncher"
+                if (ShizukuUtils.hasPermission()) {
+                    ShizukuUtils.runCommand(forceStopCommand)
+                } else if (RootUtils.isRootPermissionGranted()) {
+                    RootUtils.runCommand(forceStopCommand)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     fun updatePixelSearchbarWidget(context: Context) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {

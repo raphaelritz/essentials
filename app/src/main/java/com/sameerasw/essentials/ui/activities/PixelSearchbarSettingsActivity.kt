@@ -253,6 +253,12 @@ fun PixelSearchbarSettingsUI(
                         AppWidgetManager.INVALID_APPWIDGET_ID,
                     )
                 if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                    // Release the previously bound id, otherwise every re-pick leaks a bound widget
+                    // that the provider keeps updating for the life of the install.
+                    val previousId = viewModel.pixelSearchbarWidgetId.intValue
+                    if (previousId != AppWidgetManager.INVALID_APPWIDGET_ID && previousId != widgetId) {
+                        runCatching { widgetHost.deleteAppWidgetId(previousId) }
+                    }
                     val info = awm.getAppWidgetInfo(widgetId)
                     val providerName = info?.provider?.flattenToString()
                     viewModel.setPixelSearchbarType("widget", context)
@@ -343,6 +349,43 @@ fun PixelSearchbarSettingsUI(
                         labelProvider = { labels[it] ?: it },
                         modifier = Modifier.fillMaxWidth(),
                     )
+                }
+
+                // One-tap re-apply: re-scrapes and restarts the launcher, which is otherwise only
+                // reachable by switching the style away and back.
+                RoundedCardContainer(spacing = 2.dp) {
+                    ListItem(
+                        onClick = {
+                            HapticUtil.performVirtualKeyHaptic(view)
+                            viewModel.refreshPixelSearchbar(context)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingContent = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.rounded_refresh_24),
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        },
+                        supportingContent = {
+                            Text(
+                                text = stringResource(R.string.pixel_searchbar_refresh_desc),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        },
+                        colors =
+                            ListItemDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.surfaceBright,
+                            ),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.pixel_searchbar_refresh_title),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
 
                 // Widget mode controls
@@ -475,6 +518,43 @@ fun PixelSearchbarSettingsUI(
                                 valueRange = 0f..100f,
                                 increment = 4f,
                                 iconRes = R.drawable.rounded_rounded_corner_24,
+                            )
+                        }
+
+                        // Manual size override for the scraped widget. 0 keeps the measured size;
+                        // set one when a provider lays itself out wider than the slot.
+                        RoundedCardContainer(spacing = 2.dp) {
+                            ConfigSliderItem(
+                                title = stringResource(R.string.pixel_searchbar_widget_width_override),
+                                value = viewModel.pixelSearchbarWidgetWidthOverride.intValue.toFloat(),
+                                onValueChange = {
+                                    viewModel.pixelSearchbarWidgetWidthOverride.intValue = it.toInt()
+                                },
+                                onValueChangeFinished = {
+                                    viewModel.setPixelSearchbarWidgetWidthOverride(
+                                        viewModel.pixelSearchbarWidgetWidthOverride.intValue,
+                                        context,
+                                    )
+                                },
+                                valueRange = 0f..500f,
+                                increment = 4f,
+                                iconRes = R.drawable.rounded_search_24,
+                            )
+                            ConfigSliderItem(
+                                title = stringResource(R.string.pixel_searchbar_widget_height_override),
+                                value = viewModel.pixelSearchbarWidgetHeightOverride.intValue.toFloat(),
+                                onValueChange = {
+                                    viewModel.pixelSearchbarWidgetHeightOverride.intValue = it.toInt()
+                                },
+                                onValueChangeFinished = {
+                                    viewModel.setPixelSearchbarWidgetHeightOverride(
+                                        viewModel.pixelSearchbarWidgetHeightOverride.intValue,
+                                        context,
+                                    )
+                                },
+                                valueRange = 0f..200f,
+                                increment = 4f,
+                                iconRes = R.drawable.rounded_search_24,
                             )
                         }
                     }
