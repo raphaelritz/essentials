@@ -2194,6 +2194,11 @@
     <string name="pixel_searchbar_widget_height_override">Widget height (0 = auto)</string>
     <string name="pixel_searchbar_refresh_title">Re-apply searchbar</string>
     <string name="pixel_searchbar_refresh_desc">Re-scrape the widget and restart the launcher so changes take effect</string>
+    <string name="lock_screen_clock_hide_section">Hiding the clock</string>
+    <string name="lock_screen_clock_hide_title">Hide clock (experimental)</string>
+    <string name="lock_screen_clock_hide_desc">Draws the clock fully transparent. Android has no setting to remove it, so this depends on your build honouring a transparent colour. The always-on display clock is separate and is not affected.</string>
+    <string name="lock_screen_clock_single_line_title">Single-line clock</string>
+    <string name="lock_screen_clock_single_line_desc">Forces the smaller one-line clock instead of the stacked two-line one</string>
     <string name="pixel_searchbar_tap_action_enabled">Custom tap action</string>
     <string name="pixel_searchbar_tap_action_enabled_desc">Use DIY tap action instead of widget\'s own</string>
     <string name="pixel_searchbar_style_music">Music</string>

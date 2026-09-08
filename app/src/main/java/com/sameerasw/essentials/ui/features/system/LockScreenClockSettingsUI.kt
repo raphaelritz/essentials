@@ -345,6 +345,30 @@ fun LockScreenClockSettingsUI(
             }
         }
 
+        Text(
+            text = stringResource(R.string.lock_screen_clock_hide_section),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        RoundedCardContainer {
+            IconToggleItem(
+                iconRes = R.drawable.rounded_visibility_off_24,
+                title = stringResource(R.string.lock_screen_clock_hide_title),
+                description = stringResource(R.string.lock_screen_clock_hide_desc),
+                isChecked = viewModel.lockScreenClockHidden.value,
+                onCheckedChange = { viewModel.setLockScreenClockHidden(it, context) },
+            )
+            IconToggleItem(
+                iconRes = R.drawable.rounded_line_weight_24,
+                title = stringResource(R.string.lock_screen_clock_single_line_title),
+                description = stringResource(R.string.lock_screen_clock_single_line_desc),
+                isChecked = viewModel.lockScreenClockSingleLine.value,
+                onCheckedChange = { viewModel.setLockScreenClockSingleLine(it, context) },
+            )
+        }
+
         // About Section
         RoundedCardContainer {
             IconToggleItem(

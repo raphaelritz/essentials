@@ -402,6 +402,8 @@ class SettingsRepository(
         const val KEY_LOCK_SCREEN_CLOCK_COLOR_TONE = "lock_screen_clock_color_tone"
         const val KEY_LOCK_SCREEN_CLOCK_SELECTED_COLOR_ID = "lock_screen_clock_selected_color_id"
         const val KEY_LOCK_SCREEN_CLOCK_SEED_COLOR = "lock_screen_clock_seed_color"
+        const val KEY_LOCK_SCREEN_CLOCK_HIDDEN = "lock_screen_clock_hidden"
+        const val KEY_LOCK_SCREEN_CLOCK_SINGLE_LINE = "lock_screen_clock_single_line"
         const val KEY_RECENT_SEARCHES = "recent_searches"
         const val KEY_POCKET_MODE_ENABLED = "pocket_mode_enabled"
         const val KEY_POCKET_MODE_USE_LIGHT_SENSOR = "pocket_mode_use_light_sensor"
@@ -3046,6 +3048,32 @@ class SettingsRepository(
      * @param value [Int] Target value.
      */
     fun setLockScreenClockSeedColor(value: Int) = putInt(KEY_LOCK_SCREEN_CLOCK_SEED_COLOR, value)
+
+    /**
+     * Whether the lock screen clock is rendered fully transparent.
+     * @return The resulting Boolean data.
+     */
+    fun getLockScreenClockHidden(): Boolean = getBoolean(KEY_LOCK_SCREEN_CLOCK_HIDDEN, false)
+
+    /**
+     * Sets whether the lock screen clock is rendered fully transparent.
+     *
+     * @param value [Boolean] Target value.
+     */
+    fun setLockScreenClockHidden(value: Boolean) = putBoolean(KEY_LOCK_SCREEN_CLOCK_HIDDEN, value)
+
+    /**
+     * Whether the lock screen clock is forced to its single-line layout.
+     * @return The resulting Boolean data.
+     */
+    fun getLockScreenClockSingleLine(): Boolean = getBoolean(KEY_LOCK_SCREEN_CLOCK_SINGLE_LINE, false)
+
+    /**
+     * Sets whether the lock screen clock is forced to its single-line layout.
+     *
+     * @param value [Boolean] Target value.
+     */
+    fun setLockScreenClockSingleLine(value: Boolean) = putBoolean(KEY_LOCK_SCREEN_CLOCK_SINGLE_LINE, value)
 
     fun getLocationReachedFullScreenAlarmEnabled(): Boolean = getBoolean(KEY_LOCATION_REACHED_FULL_SCREEN_ALARM_ENABLED, true)
 

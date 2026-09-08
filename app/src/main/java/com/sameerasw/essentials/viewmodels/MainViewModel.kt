@@ -219,6 +219,8 @@ class MainViewModel : ViewModel() {
     val lockScreenClockColorTone = mutableIntStateOf(75)
     val lockScreenClockSelectedColorId = mutableStateOf("DEFAULT")
     val lockScreenClockSeedColor = mutableIntStateOf(0)
+    val lockScreenClockHidden = mutableStateOf(false)
+    val lockScreenClockSingleLine = mutableStateOf(false)
 
     // Live Wallpaper
     val liveWallpaperSelectedVideo = mutableStateOf(SettingsRepository.LIVE_WALLPAPER_DEFAULT_VIDEO)
@@ -1279,6 +1281,8 @@ class MainViewModel : ViewModel() {
         lockScreenClockSelectedColorId.value =
             settingsRepository.getLockScreenClockSelectedColorId()
         lockScreenClockSeedColor.intValue = settingsRepository.getLockScreenClockSeedColor()
+        lockScreenClockHidden.value = settingsRepository.getLockScreenClockHidden()
+        lockScreenClockSingleLine.value = settingsRepository.getLockScreenClockSingleLine()
         loadShutUpConfigs()
         recentSearches.value = settingsRepository.getRecentSearches()
         loadCachedWallpaper()
@@ -3820,6 +3824,63 @@ class MainViewModel : ViewModel() {
     }
 
     /**
+     * Fully transparent white (alpha 0). Non-zero so it is not mistaken for "unset".
+     */
+    private val TRANSPARENT_SEED_COLOR = 0x00FFFFFF
+
+    /**
+     * Hides or restores the lock screen clock by making it fully transparent.
+     *
+     * Experimental: the platform exposes no visibility control for the clock, so this relies on
+     * SystemUI applying the seed colour directly as the clock's text colour. If a build sanitises
+     * the alpha channel this will have no effect.
+     *
+     * @param hidden [Boolean] Whether the clock should be invisible.
+     * @param context [Context] Target context.
+     */
+    fun setLockScreenClockHidden(
+        hidden: Boolean,
+        context: Context,
+    ) {
+        lockScreenClockHidden.value = hidden
+        settingsRepository.setLockScreenClockHidden(hidden)
+        setLockScreenClockId(lockScreenClockId.value ?: "DEFAULT", context)
+    }
+
+    /**
+     * Forces the lock screen clock to its single-line layout, which is markedly smaller than the
+     * stacked two-line clock. Useful on its own, and as a fallback when transparency is ignored.
+     *
+     * @param singleLine [Boolean] Whether to force the single-line clock.
+     * @param context [Context] Target context.
+     */
+    fun setLockScreenClockSingleLine(
+        singleLine: Boolean,
+        context: Context,
+    ) {
+        lockScreenClockSingleLine.value = singleLine
+        settingsRepository.setLockScreenClockSingleLine(singleLine)
+
+        val key = "lockscreen_use_double_line_clock"
+        val value = if (singleLine) 0 else 1
+        var success = false
+        if (PermissionUtils.canWriteSecureSettings(context)) {
+            success =
+                runCatching {
+                    Settings.Secure.putInt(context.contentResolver, key, value)
+                }.getOrDefault(false)
+        }
+        if (!success) {
+            val command = "settings put secure $key $value"
+            if (ShizukuUtils.hasPermission()) {
+                ShizukuUtils.runCommand(command)
+            } else if (RootUtils.isRootPermissionGranted()) {
+                RootUtils.runCommand(command)
+            }
+        }
+    }
+
+    /**
      * Executes the set lock screen clock id operation.
      *
      * @param clockId [String] Target clock id.
@@ -3831,7 +3892,13 @@ class MainViewModel : ViewModel() {
     ) {
         val timestamp = System.currentTimeMillis()
         val json =
-            if (lockScreenClockSelectedColorId.value == "DEFAULT") {
+            if (lockScreenClockHidden.value) {
+                // SystemUI hands seedColor straight to the clock view's text colour, so a colour
+                // with a zero alpha channel draws nothing. There is no visibility field in this
+                // schema, so this is the only way to make the clock disappear without root.
+                // Note the AOD clock uses a separate dozing colour and is unaffected.
+                "{\"clockId\":\"$clockId\",\"seedColor\":$TRANSPARENT_SEED_COLOR,\"metadata\":{\"metadataSelectedColorId\":\"${lockScreenClockSelectedColorId.value}\",\"metadataColorToneProgress\":${lockScreenClockColorTone.intValue},\"appliedTimestamp\":$timestamp},\"axes\":[{\"key\":\"wght\",\"value\":${lockScreenClockWeight.intValue}},{\"key\":\"wdth\",\"value\":${lockScreenClockWidth.intValue}},{\"key\":\"ROND\",\"value\":${lockScreenClockRoundness.intValue}}]}"
+            } else if (lockScreenClockSelectedColorId.value == "DEFAULT") {
                 "{\"clockId\":\"$clockId\",\"metadata\":{\"metadataSelectedColorId\":\"DEFAULT\",\"metadataColorToneProgress\":${lockScreenClockColorTone.intValue},\"appliedTimestamp\":$timestamp},\"axes\":[{\"key\":\"wght\",\"value\":${lockScreenClockWeight.intValue}},{\"key\":\"wdth\",\"value\":${lockScreenClockWidth.intValue}},{\"key\":\"ROND\",\"value\":${lockScreenClockRoundness.intValue}}]}"
             } else {
                 "{\"clockId\":\"$clockId\",\"seedColor\":${lockScreenClockSeedColor.intValue},\"metadata\":{\"metadataSelectedColorId\":\"${lockScreenClockSelectedColorId.value}\",\"metadataColorToneProgress\":${lockScreenClockColorTone.intValue},\"appliedTimestamp\":$timestamp},\"axes\":[{\"key\":\"wght\",\"value\":${lockScreenClockWeight.intValue}},{\"key\":\"wdth\",\"value\":${lockScreenClockWidth.intValue}},{\"key\":\"ROND\",\"value\":${lockScreenClockRoundness.intValue}}]}"
