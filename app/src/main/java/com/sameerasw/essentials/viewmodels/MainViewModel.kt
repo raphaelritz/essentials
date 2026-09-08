@@ -3785,26 +3785,35 @@ class MainViewModel : ViewModel() {
             try {
                 val type = settingsRepository.getPixelSearchbarType()
 
+                if (!isPixelSearchbarEnabled.value) return@launch
+
                 if (type == "widget" || type == "music") {
-                    // Stop before starting. Starting an already-running service does re-run
-                    // onStartCommand, but the teardown is what actually forces a clean rebind —
-                    // it is the step the style-away-and-back workaround performs.
                     com.sameerasw.essentials.services.widgets.WidgetScraperService
                         .stop(context)
-                    kotlinx.coroutines.delay(SERVICE_RESTART_DELAY_MS)
+                }
+
+                // Writing selected_search_engine its current value changes nothing: the settings
+                // provider drops an unchanged write, so no observer fires and the launcher rebuilds
+                // an identical search slot. Only a real value change makes it re-bind, which is why
+                // switching the provider to Google and back is the manual workaround. Do exactly
+                // that, off then on, each step restarting the launcher.
+                applyPixelSearchbarSetting(context, false)
+                kotlinx.coroutines.delay(PROVIDER_TOGGLE_DELAY_MS)
+
+                if (type == "widget" || type == "music") {
                     if (type == "widget") {
                         // Make the next render republish its measured size.
                         settingsRepository.setPixelSearchbarWidgetHostSize(0, 0)
                     }
                     com.sameerasw.essentials.services.widgets.WidgetScraperService
                         .start(context)
+                    // Give the provider a moment to push a fresh scrape before the launcher comes
+                    // back up, so it starts with current content rather than the placeholder.
+                    kotlinx.coroutines.delay(SERVICE_RESTART_DELAY_MS)
                 }
 
+                applyPixelSearchbarSetting(context, true)
                 updatePixelSearchbarWidget(context)
-
-                // Re-assert the secure setting and restart the launcher through the same path that
-                // enabling the feature uses, rather than a hand-rolled force-stop.
-                applyPixelSearchbarSetting(context, isPixelSearchbarEnabled.value)
 
                 withContext(kotlinx.coroutines.Dispatchers.Main) {
                     Toast
@@ -3841,7 +3850,9 @@ class MainViewModel : ViewModel() {
     /**
      * Fully transparent white (alpha 0). Non-zero so it is not mistaken for "unset".
      */
-    private val SERVICE_RESTART_DELAY_MS = 350L
+    private val SERVICE_RESTART_DELAY_MS = 600L
+
+    private val PROVIDER_TOGGLE_DELAY_MS = 900L
 
     private val TRANSPARENT_SEED_COLOR = 0x00FFFFFF
 
