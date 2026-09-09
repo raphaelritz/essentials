@@ -89,14 +89,29 @@ android {
         applicationId = "com.sameerasw.essentials"
         minSdk = 26
         targetSdk = 37
-        versionCode = 62
-        versionName = "18.0-beta.2"
+
+        val upstreamVersionCode = 62
+        val upstreamVersionName = "18.0-beta.2"
+        val forkRelease = 1
+
+        versionCode = upstreamVersionCode * 10 + forkRelease
+        versionName = "$upstreamVersionName-$forkRelease"
 
         val whatsNewCounter = 2
         buildConfigField("int", "WHATS_NEW_COUNTER", whatsNewCounter.toString())
         buildConfigField("int", "REQUIRED_WEAR_VERSION_CODE", "7")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    val forkKeystore = file(providers.gradleProperty("forkStoreFile").getOrElse("fork-release.jks"))
+    if (forkKeystore.exists()) {
+        signingConfigs.create("fork") {
+            storeFile = forkKeystore
+            storePassword = providers.gradleProperty("forkStorePassword").get()
+            keyAlias = providers.gradleProperty("forkKeyAlias").get()
+            keyPassword = providers.gradleProperty("forkKeyPassword").get()
+        }
     }
 
     buildTypes {
@@ -119,6 +134,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            signingConfig = signingConfigs.findByName("fork") ?: signingConfigs.getByName("debug")
         }
     }
     compileOptions {
