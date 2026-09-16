@@ -369,7 +369,10 @@ class SettingsRepository(
         /** Whether [key] is one of the wallpaper clock's colour, material or direction settings. */
         fun isLockClockLookKey(key: String): Boolean =
             key.startsWith("lock_clock_") &&
-                (key.endsWith("_color_id") || key.endsWith("_seed_color") || key.endsWith("_gradient") || key.endsWith("gradient_direction"))
+                (key.endsWith("_color_id") || key.endsWith("_seed_color") || key.endsWith("material") || key.endsWith("_gradient") || key.endsWith("gradient_direction") || key.endsWith("glass_frost"))
+
+        const val LOCK_CLOCK_MATERIAL_SOLID = "solid"
+        const val LOCK_CLOCK_MATERIAL_GLASS = "glass"
 
         /** The wallpaper clock's parts, each with a look of its own: the hours or the minutes, in light or in dark mode. */
         val LOCK_CLOCK_PARTS = listOf("", "minutes", "dark", "minutes_dark")
@@ -3266,12 +3269,26 @@ class SettingsRepository(
         value: Int,
     ) = putInt(lockClockKey(slot, "seed_color"), value)
 
+    fun getLockClockMaterial(part: String): String = getString(lockClockKey(part, "material"), LOCK_CLOCK_MATERIAL_SOLID) ?: LOCK_CLOCK_MATERIAL_SOLID
+
+    fun setLockClockMaterial(
+        part: String,
+        value: String,
+    ) = putString(lockClockKey(part, "material"), value)
+
     fun getLockClockGradientDirection(part: String): String = getString(lockClockKey(part, "gradient_direction"), LOCK_CLOCK_GRADIENT_DOWN) ?: LOCK_CLOCK_GRADIENT_DOWN
 
     fun setLockClockGradientDirection(
         part: String,
         value: String,
     ) = putString(lockClockKey(part, "gradient_direction"), value)
+
+    fun getLockClockGlassFrost(part: String): Float = getFloat(lockClockKey(part, "glass_frost"), 0.25f)
+
+    fun setLockClockGlassFrost(
+        part: String,
+        value: Float,
+    ) = putFloat(lockClockKey(part, "glass_frost"), value)
 
     fun getLockClockGradient(part: String): Boolean = getBoolean(lockClockKey(part, "gradient"), false)
 

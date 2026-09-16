@@ -13,9 +13,11 @@ import android.animation.TimeInterpolator
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Point
@@ -188,7 +190,7 @@ class LockClockLayer(
     private val handler = Handler(Looper.getMainLooper())
 
     /**
-     * The plugin renders in white, a mask the face's colour is painted through: the colour the
+     * The plugin renders in white, a mask the face's material is painted through: the colour the
      * keyguard would give the real clock, or the wallpaper clock's own dark-mode colour, brightened
      * against the keyguard's scrim and under white for as long as the always-on display's white
      * outline is turning into it.
@@ -201,6 +203,10 @@ class LockClockLayer(
             xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
         }
     private val density = context.resources.displayMetrics.density
+    private val glass = GlassMaterial(context)
+
+    /** The slide and scale the layer draws a face through; the glass looks through them at the wallpaper where it lies on the screen. */
+    private val placement = Matrix()
     private var hours = look(minutes = false)
     private var minutes = look(minutes = true)
     private var split = repository.getLockClockSplit()
@@ -400,6 +406,7 @@ class LockClockLayer(
         val alpha = 1f - exit
         canvas.save()
         canvas.translate(0f, -UNLOCK_RISE_DP * density * exit)
+        placement.setTranslate(0f, -UNLOCK_RISE_DP * density * exit)
         if (dozeAnimator != null) {
             drawDozeTransition(canvas, hosted, alpha, dozeProgress())
         } else {
@@ -417,10 +424,17 @@ class LockClockLayer(
         canvas.restore()
     }
 
+    /** The lock wallpaper as the engine draws it and where, for the glass to show through the digits. */
+    fun setBackdrop(
+        shown: Bitmap?,
+        at: RectF?,
+    ) = glass.setBackdrop(shown, at)
+
     fun release() {
         stopDozeAnimation()
         swapAnimator?.cancel()
         drop()
+        glass.release()
     }
 
     private fun host(clockId: String) {
@@ -447,13 +461,18 @@ class LockClockLayer(
         hostedFor = null
     }
 
-    /** One part's paint: the two colours the theme in force gives it and whether it runs from one into the other. */
+    /** One part's paint: its material, the two colours the theme in force gives it, whether it runs from one into the other, and the glass's frost. */
     private class Look(
+        val material: String,
         val gradient: Boolean,
         val direction: String,
         val first: Int,
         val second: Int,
-    )
+        val frost: Float,
+    ) {
+        val glass: Boolean
+            get() = material == SettingsRepository.LOCK_CLOCK_MATERIAL_GLASS
+    }
 
     private fun restyle() {
         hours = look(minutes = false)
@@ -481,7 +500,7 @@ class LockClockLayer(
                 else -> slotColour(SettingsRepository.LOCK_CLOCK_SLOT_SECOND, dark)
             }
         val part = SettingsRepository.lockClockPart(minutes, own)
-        return Look(repository.getLockClockGradient(part), repository.getLockClockGradientDirection(part), first, second)
+        return Look(repository.getLockClockMaterial(part), repository.getLockClockGradient(part), repository.getLockClockGradientDirection(part), first, second, repository.getLockClockGlassFrost(part))
     }
 
     private fun slotColour(
@@ -510,6 +529,7 @@ class LockClockLayer(
         fillPaint.shader =
             when {
                 compare -> null
+                look.glass -> glass.shader(look.frost, colours(area, look), placement)
                 look.gradient -> colours(area, look)
                 else -> null
             }
@@ -601,6 +621,8 @@ class LockClockLayer(
         canvas.save()
         canvas.translate(0f, aodOffsetY * travel)
         canvas.scale(scale, scale, pivotX, pivotY)
+        placement.preTranslate(0f, aodOffsetY * travel)
+        placement.preScale(scale, scale, pivotX, pivotY)
         drawFace(canvas, hosted, small, rect, alpha * fade)
         canvas.restore()
     }
@@ -629,6 +651,7 @@ class LockClockLayer(
                     listOf(RectF(bounds.left, bounds.top, bounds.right, y) to hours, RectF(bounds.left, y, bounds.right, bounds.bottom) to minutes)
                 }
             }
+        if (parts.any { it.second.glass }) glass.prepare(hosted, small, painted, bounds, FACE_SCALE)
         layerPaint.alpha = (alpha * 255).toInt()
         canvas.saveLayer(bounds, layerPaint)
         canvas.save()

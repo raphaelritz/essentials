@@ -322,8 +322,10 @@ class MainViewModel : ViewModel() {
     val lockClockSplitSmall = mutableStateOf(true)
     val lockClockColorIds = mutableStateMapOf<String, String>()
     val lockClockColorTones = mutableStateMapOf<String, Int>()
+    val lockClockMaterials = mutableStateMapOf<String, String>()
     val lockClockGradients = mutableStateMapOf<String, Boolean>()
     val lockClockGradientDirections = mutableStateMapOf<String, String>()
+    val lockClockGlassFrosts = mutableStateMapOf<String, Float>()
 
     // Live Wallpaper
     val liveWallpaperSelectedVideo = mutableStateOf(SettingsRepository.LIVE_WALLPAPER_DEFAULT_VIDEO)
@@ -1624,8 +1626,10 @@ class MainViewModel : ViewModel() {
             lockClockColorTones[slot] = settingsRepository.getLockClockColorTone(slot)
         }
         for (part in SettingsRepository.LOCK_CLOCK_PARTS) {
+            lockClockMaterials[part] = settingsRepository.getLockClockMaterial(part)
             lockClockGradients[part] = settingsRepository.getLockClockGradient(part)
             lockClockGradientDirections[part] = settingsRepository.getLockClockGradientDirection(part)
+            lockClockGlassFrosts[part] = settingsRepository.getLockClockGlassFrost(part)
         }
         loadShutUpConfigs()
         recentSearches.value = settingsRepository.getRecentSearches()
@@ -4288,12 +4292,28 @@ class MainViewModel : ViewModel() {
         settingsRepository.setLockClockSeedColor(slot, calculateEffectiveSeedColor(lockClockColorIds[slot] ?: "DEFAULT", tone))
     }
 
+    fun setLockClockMaterial(
+        part: String,
+        material: String,
+    ) {
+        lockClockMaterials[part] = material
+        settingsRepository.setLockClockMaterial(part, material)
+    }
+
     fun setLockClockGradientDirection(
         part: String,
         direction: String,
     ) {
         lockClockGradientDirections[part] = direction
         settingsRepository.setLockClockGradientDirection(part, direction)
+    }
+
+    fun setLockClockGlassFrost(
+        part: String,
+        frost: Float,
+    ) {
+        lockClockGlassFrosts[part] = frost
+        settingsRepository.setLockClockGlassFrost(part, frost)
     }
 
     fun setLockClockGradient(
