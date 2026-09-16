@@ -23,6 +23,7 @@ import com.sameerasw.essentials.domain.diy.DIYRepository
 import com.sameerasw.essentials.services.AppDetectionService
 import com.sameerasw.essentials.services.AppUpdateWorker
 import com.sameerasw.essentials.services.BatteryNotificationService
+import com.sameerasw.essentials.services.widgets.WidgetScraperService
 import com.sameerasw.essentials.utils.SimCarrierUtil
 import com.sameerasw.essentials.utils.ShellUtils
 import java.util.concurrent.TimeUnit
@@ -39,10 +40,32 @@ object ServiceUtils {
     fun startRequiredServices(context: Context) {
         val settingsRepository = SettingsRepository(context)
 
+        startWidgetScraperIfNeeded(context, settingsRepository)
         startAppDetectionServiceIfNeeded(context, settingsRepository)
         startBatteryNotificationServiceIfNeeded(context, settingsRepository)
         schedulePeriodicAppUpdateCheck(context, settingsRepository)
         applyPostRebootSettings(context, settingsRepository)
+    }
+
+    /**
+     * Re-arms the searchbar scraper. Called from every process start, not just boot, so the
+     * searchbar recovers from process death without the user re-applying anything.
+     *
+     * @param context [Context] Target context.
+     * @param settingsRepository [SettingsRepository] Settings source.
+     */
+    private fun startWidgetScraperIfNeeded(
+        context: Context,
+        settingsRepository: SettingsRepository,
+    ) {
+        try {
+            if (!settingsRepository.getBoolean(SettingsRepository.KEY_PIXEL_SEARCHBAR, false)) return
+            val type = settingsRepository.getPixelSearchbarType()
+            if (type != "widget" && type != "music") return
+            WidgetScraperService.start(context)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun applyPostRebootSettings(

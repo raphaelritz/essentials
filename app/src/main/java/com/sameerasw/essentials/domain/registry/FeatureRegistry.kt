@@ -612,6 +612,24 @@ object FeatureRegistry {
                 hasMoreSettings = true,
                 isBeta = true,
                 parentFeatureId = "Widgets",
+                searchableSettings =
+                    listOf(
+                        SearchSetting(
+                            R.string.pixel_searchbar_refresh_title,
+                            R.string.pixel_searchbar_refresh_desc,
+                            "pixel_searchbar_refresh",
+                        ),
+                        SearchSetting(
+                            R.string.search_pixel_searchbar_widget_size_title,
+                            R.string.search_pixel_searchbar_widget_size_desc,
+                            "pixel_searchbar_widget_size",
+                        ),
+                        SearchSetting(
+                            R.string.pixel_searchbar_keep_alive_setting,
+                            R.string.pixel_searchbar_keep_alive_desc,
+                            "pixel_searchbar_keep_alive",
+                        ),
+                    ),
             ) {
                 override fun isEnabled(viewModel: MainViewModel) = viewModel.isPixelSearchbarEnabled.value
 
