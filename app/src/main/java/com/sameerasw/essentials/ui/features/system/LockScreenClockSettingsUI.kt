@@ -54,7 +54,9 @@ import com.sameerasw.essentials.ui.components.sliders.ConfigSliderItem
 import com.sameerasw.essentials.ui.core.cards.IconToggleItem
 import com.sameerasw.essentials.ui.core.containers.RoundedCardContainer
 import com.sameerasw.essentials.ui.core.pickers.SegmentedPicker
+import com.sameerasw.essentials.ui.modifiers.highlight
 import com.sameerasw.essentials.utils.HapticUtil
+import com.sameerasw.essentials.utils.LockScreenClockSize
 import com.sameerasw.essentials.viewmodels.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -343,6 +345,57 @@ fun LockScreenClockSettingsUI(
                     iconRes = R.drawable.rounded_rounded_corner_24,
                 )
             }
+        }
+
+        RoundedCardContainer {
+            IconToggleItem(
+                iconRes = R.drawable.rounded_visibility_off_24,
+                title = stringResource(R.string.lock_screen_clock_hide_title),
+                modifier = Modifier.highlight(highlightSetting == "lock_screen_clock_hide"),
+                description = stringResource(R.string.lock_screen_clock_hide_desc),
+                isChecked = viewModel.lockScreenClockHidden.value,
+                onCheckedChange = { viewModel.setLockScreenClockHidden(it, context) },
+            )
+            IconToggleItem(
+                iconRes = R.drawable.rounded_visibility_off_24,
+                title = stringResource(R.string.lock_screen_weather_title),
+                modifier = Modifier.highlight(highlightSetting == "lock_screen_weather_hide"),
+                description = stringResource(R.string.lock_screen_weather_desc),
+                isChecked = viewModel.lockScreenWeatherHidden.value,
+                onCheckedChange = { viewModel.setLockScreenWeatherHidden(it, context) },
+            )
+        }
+
+        Text(
+            text = stringResource(R.string.lock_screen_clock_size),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        RoundedCardContainer {
+            val size by viewModel.lockScreenClockSize
+            val sizes =
+                listOf(
+                    LockScreenClockSize.DYNAMIC to stringResource(R.string.lock_screen_clock_size_dynamic),
+                    LockScreenClockSize.LARGE to stringResource(R.string.lock_screen_clock_size_large),
+                    LockScreenClockSize.SMALL to stringResource(R.string.lock_screen_clock_size_small),
+                )
+            SegmentedPicker(
+                items = sizes,
+                selectedItem = sizes.first { it.first == size },
+                onItemSelected = { viewModel.setLockScreenClockSize(it.first, context) },
+                labelProvider = { it.second },
+                modifier = Modifier.highlight(highlightSetting == "lock_screen_clock_size"),
+                description =
+                    stringResource(
+                        when (size) {
+                            LockScreenClockSize.LARGE -> R.string.lock_screen_clock_size_large_desc
+                            LockScreenClockSize.SMALL -> R.string.lock_screen_clock_size_small_desc
+                            else -> R.string.lock_screen_clock_size_dynamic_desc
+                        },
+                    ),
+            )
         }
 
         // About Section

@@ -27,6 +27,7 @@ import com.sameerasw.essentials.domain.model.NotificationLightingSweepPosition
 import com.sameerasw.essentials.domain.model.ScaleAnimationsProfile
 import com.sameerasw.essentials.domain.model.TrackedRepo
 import com.sameerasw.essentials.domain.model.github.GitHubUser
+import com.sameerasw.essentials.utils.LockScreenClockSize
 import com.sameerasw.essentials.utils.RootUtils
 import com.sameerasw.essentials.utils.ShizukuUtils
 import kotlinx.coroutines.channels.awaitClose
@@ -481,6 +482,9 @@ class SettingsRepository(
         const val KEY_LOCK_SCREEN_CLOCK_COLOR_TONE = "lock_screen_clock_color_tone"
         const val KEY_LOCK_SCREEN_CLOCK_SELECTED_COLOR_ID = "lock_screen_clock_selected_color_id"
         const val KEY_LOCK_SCREEN_CLOCK_SEED_COLOR = "lock_screen_clock_seed_color"
+        const val KEY_LOCK_SCREEN_CLOCK_HIDDEN = "lock_screen_clock_hidden"
+        const val KEY_LOCK_SCREEN_CLOCK_SIZE = "lock_screen_clock_size"
+        const val KEY_LOCK_SCREEN_WEATHER_HIDDEN = "lock_screen_weather_hidden"
         const val KEY_RECENT_SEARCHES = "recent_searches"
         const val KEY_POCKET_MODE_ENABLED = "pocket_mode_enabled"
         const val KEY_POCKET_MODE_USE_LIGHT_SENSOR = "pocket_mode_use_light_sensor"
@@ -3061,6 +3065,36 @@ class SettingsRepository(
      * @param value [Int] Target value.
      */
     fun setLockScreenClockSeedColor(value: Int) = putInt(KEY_LOCK_SCREEN_CLOCK_SEED_COLOR, value)
+
+    /**
+     * Whether the lock screen clock is rendered fully transparent.
+     * @return The resulting Boolean data.
+     */
+    fun getLockScreenClockHidden(): Boolean = getBoolean(KEY_LOCK_SCREEN_CLOCK_HIDDEN, false)
+
+    /**
+     * Sets whether the lock screen clock is rendered fully transparent.
+     *
+     * @param value [Boolean] Target value.
+     */
+    fun setLockScreenClockHidden(value: Boolean) = putBoolean(KEY_LOCK_SCREEN_CLOCK_HIDDEN, value)
+
+    fun getLockScreenClockSize(): String = getString(KEY_LOCK_SCREEN_CLOCK_SIZE, LockScreenClockSize.DYNAMIC) ?: LockScreenClockSize.DYNAMIC
+
+    fun setLockScreenClockSize(value: String) = putString(KEY_LOCK_SCREEN_CLOCK_SIZE, value)
+
+    /**
+     * Whether the lock screen weather is hidden.
+     * @return The resulting Boolean data.
+     */
+    fun getLockScreenWeatherHidden(): Boolean = getBoolean(KEY_LOCK_SCREEN_WEATHER_HIDDEN, false)
+
+    /**
+     * Sets whether the lock screen weather is hidden.
+     *
+     * @param value [Boolean] Target value.
+     */
+    fun setLockScreenWeatherHidden(value: Boolean) = putBoolean(KEY_LOCK_SCREEN_WEATHER_HIDDEN, value)
 
     fun getLocationReachedFullScreenAlarmEnabled(): Boolean = getBoolean(KEY_LOCATION_REACHED_FULL_SCREEN_ALARM_ENABLED, true)
 

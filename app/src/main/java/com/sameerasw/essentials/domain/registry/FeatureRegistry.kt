@@ -398,6 +398,24 @@ object FeatureRegistry {
                 description = R.string.feat_lock_screen_clock_desc,
                 aboutDescription = R.string.about_desc_lock_screen_clock,
                 permissionKeys = listOf("WRITE_SECURE_SETTINGS"),
+                searchableSettings =
+                    listOf(
+                        SearchSetting(
+                            R.string.lock_screen_clock_hide_title,
+                            R.string.lock_screen_clock_hide_desc,
+                            "lock_screen_clock_hide",
+                        ),
+                        SearchSetting(
+                            R.string.lock_screen_weather_title,
+                            R.string.lock_screen_weather_desc,
+                            "lock_screen_weather_hide",
+                        ),
+                        SearchSetting(
+                            R.string.search_lock_screen_clock_size_title,
+                            R.string.search_lock_screen_clock_size_desc,
+                            "lock_screen_clock_size",
+                        ),
+                    ),
                 showToggle = false,
                 parentFeatureId = "Display",
             ) {

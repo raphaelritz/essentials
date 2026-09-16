@@ -75,9 +75,11 @@ import com.sameerasw.essentials.services.tiles.ScreenOffAccessibilityService
 import com.sameerasw.essentials.utils.AppIconUtil
 import com.sameerasw.essentials.utils.AppUtil
 import com.sameerasw.essentials.utils.DeviceUtils
+import com.sameerasw.essentials.utils.LockScreenClockSize
 import com.sameerasw.essentials.utils.PermissionUtils
 import com.sameerasw.essentials.utils.RefreshRateUtils
 import com.sameerasw.essentials.utils.RootUtils
+import com.sameerasw.essentials.utils.SecureSettings
 import com.sameerasw.essentials.utils.ShellUtils
 import com.sameerasw.essentials.utils.ShizukuUtils
 import com.sameerasw.essentials.utils.SurfaceFlingerControl
@@ -294,6 +296,9 @@ class MainViewModel : ViewModel() {
     val lockScreenClockColorTone = mutableIntStateOf(75)
     val lockScreenClockSelectedColorId = mutableStateOf("DEFAULT")
     val lockScreenClockSeedColor = mutableIntStateOf(0)
+    val lockScreenClockHidden = mutableStateOf(false)
+    val lockScreenClockSize = mutableStateOf(LockScreenClockSize.DYNAMIC)
+    val lockScreenWeatherHidden = mutableStateOf(false)
     val wallpaperCoverage = mutableStateOf(WallpaperImages.Coverage.NONE)
     val wallpaperLockImage = mutableStateOf(SettingsRepository.WALLPAPER_IMAGE_SYSTEM)
     val wallpaperHomeImage = mutableStateOf(SettingsRepository.WALLPAPER_IMAGE_LOCK)
@@ -1585,6 +1590,9 @@ class MainViewModel : ViewModel() {
         lockScreenClockSelectedColorId.value =
             settingsRepository.getLockScreenClockSelectedColorId()
         lockScreenClockSeedColor.intValue = settingsRepository.getLockScreenClockSeedColor()
+        lockScreenClockHidden.value = settingsRepository.getLockScreenClockHidden()
+        lockScreenClockSize.value = settingsRepository.getLockScreenClockSize()
+        lockScreenWeatherHidden.value = settingsRepository.getLockScreenWeatherHidden()
         wallpaperLockImage.value = settingsRepository.getWallpaperLockImage()
         wallpaperHomeImage.value = settingsRepository.getWallpaperHomeImage()
         wallpaperLockBlur.floatValue = settingsRepository.getWallpaperLockBlur()
@@ -4152,6 +4160,22 @@ class MainViewModel : ViewModel() {
         }
     }
 
+    /** Fully transparent white (alpha 0). Non-zero so it is not mistaken for "unset". */
+    private val TRANSPARENT_SEED_COLOR = 0x00FFFFFF
+
+    /**
+     * Hides or restores the lock screen clock by making it fully transparent: the platform exposes
+     * no visibility control for the clock, and SystemUI applies the seed colour straight as the
+     * clock's text colour.
+     */
+    fun setLockScreenClockHidden(
+        hidden: Boolean,
+        context: Context,
+    ) {
+        lockScreenClockHidden.value = hidden
+        settingsRepository.setLockScreenClockHidden(hidden)
+        setLockScreenClockId(lockScreenClockId.value ?: "DEFAULT", context)
+    }
 
     /** Reads what the system shows on each screen. */
     fun refreshWallpaperState(context: Context) {
@@ -4323,6 +4347,25 @@ class MainViewModel : ViewModel() {
             Toast.makeText(context, R.string.essentials_wallpaper_failed, Toast.LENGTH_SHORT).show()
         }
     }
+
+    fun setLockScreenWeatherHidden(
+        hidden: Boolean,
+        context: Context,
+    ) {
+        lockScreenWeatherHidden.value = hidden
+        settingsRepository.setLockScreenWeatherHidden(hidden)
+        SecureSettings.putInt(context, "lockscreen_weather_enabled", if (hidden) 0 else 1)
+    }
+
+    fun setLockScreenClockSize(
+        size: String,
+        context: Context,
+    ) {
+        lockScreenClockSize.value = size
+        settingsRepository.setLockScreenClockSize(size)
+        LockScreenClockSize.apply(context, size)
+    }
+
     /**
      * Executes the set lock screen clock id operation.
      *
@@ -4335,7 +4378,13 @@ class MainViewModel : ViewModel() {
     ) {
         val timestamp = System.currentTimeMillis()
         val json =
-            if (lockScreenClockSelectedColorId.value == "DEFAULT") {
+            if (lockScreenClockHidden.value) {
+                // SystemUI hands seedColor straight to the clock view's text colour, so a colour
+                // with a zero alpha channel draws nothing. There is no visibility field in this
+                // schema, so this is the only way to make the clock disappear without root.
+                // Note the AOD clock uses a separate dozing colour and is unaffected.
+                "{\"clockId\":\"$clockId\",\"seedColor\":$TRANSPARENT_SEED_COLOR,\"metadata\":{\"metadataSelectedColorId\":\"${lockScreenClockSelectedColorId.value}\",\"metadataColorToneProgress\":${lockScreenClockColorTone.intValue},\"appliedTimestamp\":$timestamp},\"axes\":[{\"key\":\"wght\",\"value\":${lockScreenClockWeight.intValue}},{\"key\":\"wdth\",\"value\":${lockScreenClockWidth.intValue}},{\"key\":\"ROND\",\"value\":${lockScreenClockRoundness.intValue}}]}"
+            } else if (lockScreenClockSelectedColorId.value == "DEFAULT") {
                 "{\"clockId\":\"$clockId\",\"metadata\":{\"metadataSelectedColorId\":\"DEFAULT\",\"metadataColorToneProgress\":${lockScreenClockColorTone.intValue},\"appliedTimestamp\":$timestamp},\"axes\":[{\"key\":\"wght\",\"value\":${lockScreenClockWeight.intValue}},{\"key\":\"wdth\",\"value\":${lockScreenClockWidth.intValue}},{\"key\":\"ROND\",\"value\":${lockScreenClockRoundness.intValue}}]}"
             } else {
                 "{\"clockId\":\"$clockId\",\"seedColor\":${lockScreenClockSeedColor.intValue},\"metadata\":{\"metadataSelectedColorId\":\"${lockScreenClockSelectedColorId.value}\",\"metadataColorToneProgress\":${lockScreenClockColorTone.intValue},\"appliedTimestamp\":$timestamp},\"axes\":[{\"key\":\"wght\",\"value\":${lockScreenClockWeight.intValue}},{\"key\":\"wdth\",\"value\":${lockScreenClockWidth.intValue}},{\"key\":\"ROND\",\"value\":${lockScreenClockRoundness.intValue}}]}"

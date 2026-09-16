@@ -2598,6 +2598,17 @@
     <string name="action_expand_notifications">Expand notifications</string>
     <string name="action_expand_settings">Expand settings</string>
     <string name="action_collapse_status_bar">Collapse status bar</string>
+    <string name="lock_screen_clock_hide_title">Hide clock</string>
+    <string name="lock_screen_clock_hide_desc">Draws the lock screen clock fully transparent, for depth wallpapers from other apps that bring their own clock. The always-on display clock is not affected.</string>
+    <string name="lock_screen_clock_size">Size</string>
+    <string name="lock_screen_clock_size_dynamic">Dynamic</string>
+    <string name="lock_screen_clock_size_large">Large</string>
+    <string name="lock_screen_clock_size_small">Small</string>
+    <string name="lock_screen_clock_size_dynamic_desc">Two lines, one line while notifications or media show on the lock screen</string>
+    <string name="lock_screen_clock_size_large_desc">Always two lines. Notifications and media stay off the lock screen.</string>
+    <string name="lock_screen_clock_size_small_desc">Always one line, on the always-on display too</string>
+    <string name="search_lock_screen_clock_size_title">Lock screen clock size</string>
+    <string name="search_lock_screen_clock_size_desc">Two lines, one line, or one line while notifications show</string>
     <string name="unified_wallpaper_label">Essentials wallpaper</string>
     <string name="unified_wallpaper_description">Draws your photos on the home and lock screen with adjustable blur</string>
     <string name="essentials_wallpaper_title">Essentials wallpaper</string>
@@ -2638,4 +2649,6 @@
     <string name="link_wallpaper_images_desc">Choose what the lock screen, home screen and always-on display show</string>
     <string name="feat_photo_wallpaper_title">Photo</string>
     <string name="feat_photo_wallpaper_desc">Your own photos on every screen, with blur.</string>
+    <string name="lock_screen_weather_title">Hide lock screen weather</string>
+    <string name="lock_screen_weather_desc">Removes the weather from the lock screen</string>
 </resources>
