@@ -336,6 +336,8 @@ class SettingsRepository(
         const val KEY_LOCK_CLOCK_SMALL = "lock_clock_small"
         const val KEY_LOCK_CLOCK_RECT_LARGE = "lock_clock_rect_large"
         const val KEY_LOCK_CLOCK_RECT_SMALL = "lock_clock_rect_small"
+        const val KEY_LOCK_CLOCK_LAYOUT_KEY = "lock_clock_layout_key"
+        const val KEY_LOCK_CLOCK_SETTINGS_TO_RESTORE = "lock_clock_settings_to_restore"
         const val KEY_LOCK_CLOCK_COMPARE = "lock_clock_compare"
         const val KEY_LOCK_CLOCK_SWAP_SLIDE = "lock_clock_swap_slide"
         const val KEY_LOCK_CLOCK_SWAP_ELAPSED = "lock_clock_swap_elapsed"
@@ -3196,6 +3198,17 @@ class SettingsRepository(
     fun getLockClockSwapElapsed(): Long = getLong(KEY_LOCK_CLOCK_SWAP_ELAPSED)
 
     fun setLockClockSwapElapsed(value: Long) = putLong(KEY_LOCK_CLOCK_SWAP_ELAPSED, value)
+
+    fun getLockClockLayoutKey(): String? = getString(KEY_LOCK_CLOCK_LAYOUT_KEY, null)
+
+    fun setLockClockLayoutKey(value: String) = putString(KEY_LOCK_CLOCK_LAYOUT_KEY, value)
+
+    fun getLockClockSettingsToRestore(): String? = getString(KEY_LOCK_CLOCK_SETTINGS_TO_RESTORE, null)
+
+    fun setLockClockSettingsToRestore(value: String) = putString(KEY_LOCK_CLOCK_SETTINGS_TO_RESTORE, value)
+
+    fun clearLockClockSettingsToRestore() = remove(KEY_LOCK_CLOCK_SETTINGS_TO_RESTORE)
+
     fun isAodWallpaperUseAlbumArtEnabled(): Boolean = getBoolean(KEY_AOD_WALLPAPER_USE_ALBUM_ART, false)
 
     fun setAodWallpaperUseAlbumArt(enabled: Boolean) = putBoolean(KEY_AOD_WALLPAPER_USE_ALBUM_ART, enabled)
