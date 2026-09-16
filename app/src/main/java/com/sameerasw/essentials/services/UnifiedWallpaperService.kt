@@ -4,7 +4,7 @@
  *
  * Feature Module: Background Services & Receivers
  * File: UnifiedWallpaperService.kt
- * Description: Live wallpaper drawing the Essentials images for the home and lock screen and their blur.
+ * Description: Live wallpaper drawing the Essentials images for the home and lock screen, their blur and the lock screen clock.
  */
 
 package com.sameerasw.essentials.services
@@ -12,6 +12,10 @@ package com.sameerasw.essentials.services
 import android.animation.ValueAnimator
 import android.app.KeyguardManager
 import android.app.WallpaperManager
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -21,28 +25,29 @@ import android.graphics.RectF
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.service.wallpaper.WallpaperService
 import android.view.Choreographer
 import android.view.Display
 import android.view.Surface
 import android.view.SurfaceHolder
-import android.view.animation.PathInterpolator
 import androidx.core.animation.doOnEnd
+import androidx.core.content.ContextCompat
 import com.sameerasw.essentials.data.repository.SettingsRepository
+import com.sameerasw.essentials.utils.LockClockLayer
 import com.sameerasw.essentials.utils.WallpaperBlurUtil
 import com.sameerasw.essentials.utils.WallpaperImages
 
 /**
- * One engine set for both screens. The lock look is the lock image and its blur; the home look is
- * the home image and its blur; unlocking crossfades between them. The system has no way to blur a
- * static wallpaper and cuts hard between two wallpaper windows at unlock, which is why one engine
- * draws both screens from images kept on disk.
+ * One engine set for both screens. The lock look is the lock image, its blur and the hosted clock;
+ * the home look is the home image and its blur; unlocking crossfades between them. The system has
+ * no way to blur a static wallpaper and cuts hard between two wallpaper windows at unlock, which is
+ * why one engine draws both screens from images kept on disk.
  */
 class UnifiedWallpaperService : WallpaperService() {
     companion object {
         /** The stretch of the keyguard's unlock transition in which it fades its lock screen out. */
         private const val UNLOCK_ANIMATION_MS = 150L
-        private val UNLOCK_EXIT_INTERPOLATOR = PathInterpolator(0.1f, 0.1f, 0f, 1f)
         private const val BOTH_SCREENS = WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK
         private val FILTER_PAINT = Paint(Paint.FILTER_BITMAP_FLAG)
     }
@@ -51,6 +56,7 @@ class UnifiedWallpaperService : WallpaperService() {
 
     inner class WallpaperEngine : Engine() {
         private lateinit var repository: SettingsRepository
+        private lateinit var clock: LockClockLayer
         private val keyguardManager by lazy { applicationContext.getSystemService(KEYGUARD_SERVICE) as KeyguardManager }
 
         private var lockSource: Bitmap? = null
@@ -79,6 +85,26 @@ class UnifiedWallpaperService : WallpaperService() {
                     SettingsRepository.KEY_WALLPAPER_LOCK_BLUR,
                     SettingsRepository.KEY_WALLPAPER_HOME_BLUR,
                     -> draw()
+                    SettingsRepository.KEY_LOCK_CLOCK_IN_WALLPAPER,
+                    -> {
+                        if (!repository.getLockClockInWallpaper()) clock.release()
+                        syncLook()
+                        draw()
+                    }
+                    else -> key?.let(clock::onPreferenceChanged)
+                }
+            }
+
+        private val timeReceiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(
+                    context: Context,
+                    intent: Intent,
+                ) {
+                    if (intent.action != Intent.ACTION_TIME_TICK) clock.onTimeSettingsChanged()
+                    if (!servesLock || !isVisible) return
+                    if (clockWanted) clock.sync()
+                    draw()
                 }
             }
 
@@ -93,10 +119,25 @@ class UnifiedWallpaperService : WallpaperService() {
         private val servesLock: Boolean
             get() = flags and WallpaperManager.FLAG_LOCK != 0
 
+        /** The clock needs one engine on both screens: two wallpaper windows would cut at unlock. */
+        private val clockWanted: Boolean
+            get() = flags == BOTH_SCREENS && repository.getLockClockInWallpaper()
+
         override fun onCreate(surfaceHolder: SurfaceHolder?) {
             super.onCreate(surfaceHolder)
             repository = SettingsRepository(applicationContext)
+            clock = LockClockLayer(applicationContext, repository, isShowing = { isVisible && locked }, invalidate = ::draw)
             repository.registerOnSharedPreferenceChangeListener(prefsListener)
+            ContextCompat.registerReceiver(
+                applicationContext,
+                timeReceiver,
+                IntentFilter().apply {
+                    addAction(Intent.ACTION_TIME_TICK)
+                    addAction(Intent.ACTION_TIME_CHANGED)
+                    addAction(Intent.ACTION_TIMEZONE_CHANGED)
+                },
+                ContextCompat.RECEIVER_EXPORTED,
+            )
             // The images are stored cropped to the screen, so there is nothing to slide with the launcher.
             setOffsetNotificationsEnabled(false)
         }
@@ -110,6 +151,7 @@ class UnifiedWallpaperService : WallpaperService() {
             super.onSurfaceChanged(holder, format, width, height)
             surfaceWidth = width
             surfaceHeight = height
+            clock.resize(width, height)
             syncLook()
             reload()
         }
@@ -140,10 +182,15 @@ class UnifiedWallpaperService : WallpaperService() {
         ): Bundle? {
             when (action) {
                 "android.wallpaper.wakingup" -> {
+                    val startedAt = SystemClock.uptimeMillis()
                     syncLook()
+                    if (clockWanted) clock.wake(locked, startedAt)
                     draw()
                 }
-                "android.wallpaper.goingtosleep" -> stopWatchingKeyguard()
+                "android.wallpaper.goingtosleep" -> {
+                    stopWatchingKeyguard()
+                    if (clockWanted) clock.sleep(locked, isVisible)
+                }
             }
             return super.onCommand(action, x, y, z, extras, resultRequested)
         }
@@ -157,6 +204,7 @@ class UnifiedWallpaperService : WallpaperService() {
             if (locked) {
                 unlockAnimator?.cancel()
                 unlockProgress = 0f
+                if (clockWanted) clock.sync()
                 watchKeyguard()
             } else if (unlockAnimator?.isRunning != true) {
                 unlockProgress = 1f
@@ -191,7 +239,7 @@ class UnifiedWallpaperService : WallpaperService() {
             unlockAnimator =
                 ValueAnimator.ofFloat(unlockProgress, 1f).apply {
                     duration = UNLOCK_ANIMATION_MS
-                    interpolator = UNLOCK_EXIT_INTERPOLATOR
+                    interpolator = LockClockLayer.UNLOCK_EXIT_INTERPOLATOR
                     addUpdateListener {
                         unlockProgress = it.animatedValue as Float
                         draw()
@@ -267,11 +315,14 @@ class UnifiedWallpaperService : WallpaperService() {
                 crossfadePaint.alpha = (unlockProgress * 255).toInt()
                 canvas.drawBitmap(home, null, destinationFor(home), crossfadePaint)
             }
+            if (clockWanted) {
+                clock.draw(canvas, unlockProgress)
+            }
         }
 
         /** The panel is asked for its fastest rate only while something of ours animates. */
         private fun voteRefreshRate() {
-            val rate = if (unlockAnimator?.isRunning == true) fastestRefreshRate else 0f
+            val rate = if (unlockAnimator?.isRunning == true || clock.animating) fastestRefreshRate else 0f
             if (rate == votedRefreshRate || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
             surfaceHolder.surface.setFrameRate(rate, Surface.FRAME_RATE_COMPATIBILITY_DEFAULT, Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS)
             votedRefreshRate = rate
@@ -290,6 +341,8 @@ class UnifiedWallpaperService : WallpaperService() {
         override fun onDestroy() {
             unlockAnimator?.cancel()
             stopWatchingKeyguard()
+            clock.release()
+            applicationContext.unregisterReceiver(timeReceiver)
             repository.unregisterOnSharedPreferenceChangeListener(prefsListener)
             recycleImages()
             super.onDestroy()

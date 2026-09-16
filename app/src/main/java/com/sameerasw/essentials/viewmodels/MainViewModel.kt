@@ -75,6 +75,7 @@ import com.sameerasw.essentials.services.tiles.ScreenOffAccessibilityService
 import com.sameerasw.essentials.utils.AppIconUtil
 import com.sameerasw.essentials.utils.AppUtil
 import com.sameerasw.essentials.utils.DeviceUtils
+import com.sameerasw.essentials.utils.LockClockLayer
 import com.sameerasw.essentials.utils.LockScreenClockSize
 import com.sameerasw.essentials.utils.PermissionUtils
 import com.sameerasw.essentials.utils.RefreshRateUtils
@@ -308,6 +309,9 @@ class MainViewModel : ViewModel() {
     /** Whether the system's own image on that screen can still be copied in: not ours yet, and not a live wallpaper. */
     val wallpaperLockKeepable = mutableStateOf(false)
     val wallpaperHomeKeepable = mutableStateOf(false)
+    val lockClockInWallpaper = mutableStateOf(false)
+    val lockClockSupported = mutableStateOf(false)
+    val lockClockCompare = mutableStateOf(false)
 
     // Live Wallpaper
     val liveWallpaperSelectedVideo = mutableStateOf(SettingsRepository.LIVE_WALLPAPER_DEFAULT_VIDEO)
@@ -1597,6 +1601,8 @@ class MainViewModel : ViewModel() {
         wallpaperHomeImage.value = settingsRepository.getWallpaperHomeImage()
         wallpaperLockBlur.floatValue = settingsRepository.getWallpaperLockBlur()
         wallpaperHomeBlur.floatValue = settingsRepository.getWallpaperHomeBlur()
+        lockClockInWallpaper.value = settingsRepository.getLockClockInWallpaper()
+        lockClockCompare.value = settingsRepository.getLockClockCompare()
         loadShutUpConfigs()
         recentSearches.value = settingsRepository.getRecentSearches()
         loadCachedWallpaper()
@@ -4177,8 +4183,13 @@ class MainViewModel : ViewModel() {
         setLockScreenClockId(lockScreenClockId.value ?: "DEFAULT", context)
     }
 
-    /** Reads what the system shows on each screen. */
+    /** Whether the wallpaper draws the clock right now: switched on, a clock it can host, and Essentials on both screens. */
+    val lockClockInWallpaperActive: Boolean
+        get() = lockClockInWallpaper.value && lockClockSupported.value && wallpaperCoverage.value == WallpaperImages.Coverage.BOTH
+
+    /** Reads what the system shows on each screen and whether the keyguard's clock is one the wallpaper can host. */
     fun refreshWallpaperState(context: Context) {
+        val wasActive = lockClockInWallpaperActive
         val coverage = WallpaperImages.coverage(context)
         wallpaperCoverage.value = coverage
         wallpaperLockKeepable.value =
@@ -4189,6 +4200,27 @@ class MainViewModel : ViewModel() {
             coverage != WallpaperImages.Coverage.BOTH &&
             coverage != WallpaperImages.Coverage.HOME_ONLY &&
             !WallpaperImages.isLive(context, WallpaperManager.FLAG_SYSTEM)
+        lockClockSupported.value = LockClockLayer.supports(LockClockLayer.currentClockId(context))
+        if (lockClockInWallpaperActive != wasActive) setLockScreenClockId(lockScreenClockId.value ?: "DEFAULT", context)
+    }
+
+    fun setLockClockInWallpaper(
+        enabled: Boolean,
+        context: Context,
+    ) {
+        lockClockInWallpaper.value = enabled
+        settingsRepository.setLockClockInWallpaper(enabled)
+        setLockScreenClockId(lockScreenClockId.value ?: "DEFAULT", context)
+    }
+
+    /** Keeps the system clock visible next to the hosted one, for the developer options. */
+    fun setLockClockCompare(
+        enabled: Boolean,
+        context: Context,
+    ) {
+        lockClockCompare.value = enabled
+        settingsRepository.setLockClockCompare(enabled)
+        setLockScreenClockId(lockScreenClockId.value ?: "DEFAULT", context)
     }
 
     /**
@@ -4376,9 +4408,10 @@ class MainViewModel : ViewModel() {
         clockId: String,
         context: Context,
     ) {
+        lockClockSupported.value = LockClockLayer.supports(clockId)
         val timestamp = System.currentTimeMillis()
         val json =
-            if (lockScreenClockHidden.value) {
+            if ((lockScreenClockHidden.value || lockClockInWallpaperActive) && !lockClockCompare.value) {
                 // SystemUI hands seedColor straight to the clock view's text colour, so a colour
                 // with a zero alpha channel draws nothing. There is no visibility field in this
                 // schema, so this is the only way to make the clock disappear without root.

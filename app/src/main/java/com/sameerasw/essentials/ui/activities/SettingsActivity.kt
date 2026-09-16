@@ -99,6 +99,7 @@ import com.sameerasw.essentials.ui.components.MadebySameeraswCard
 import com.sameerasw.essentials.ui.components.dialogs.AboutSection
 import com.sameerasw.essentials.ui.components.menus.SegmentedDropdownMenuItem
 import com.sameerasw.essentials.ui.components.sliders.ConfigSliderItem
+import com.sameerasw.essentials.ui.composables.wallpaper.WallpaperDiagnostics
 import com.sameerasw.essentials.ui.core.cards.FeatureCard
 import com.sameerasw.essentials.ui.core.cards.IconToggleItem
 import com.sameerasw.essentials.ui.core.cards.PermissionCard
@@ -1207,6 +1208,8 @@ fun SettingsContent(
                 modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            WallpaperDiagnostics(viewModel = viewModel)
 
             RoundedCardContainer {
                 Row(
