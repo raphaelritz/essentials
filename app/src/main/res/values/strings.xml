@@ -2690,7 +2690,7 @@
     <string name="lock_clock_measure_desc">Tap to measure where the system puts each clock size. The phone locks and wakes itself for a few seconds.</string>
     <string name="lock_clock_measure_toast">The phone will lock and wake by itself; unlock it when it is done</string>
     <string name="lock_clock_measuring">Measuring the clock. Leave the screen alone until this disappears.</string>
-    <string name="lock_clock_measured">Measured for this screen layout. Tap to measure again</string>
+    <string name="lock_clock_measured">Measured for this clock on this screen layout. Tap to measure again</string>
     <string name="lock_clock_measure_stale">The screen layout changed since the last measurement. Tap to measure again</string>
     <string name="lock_clock_section">Wallpaper clock</string>
     <string name="lock_clock_needs_wallpaper">Not set. Tap to set it up under Wallpapers.</string>

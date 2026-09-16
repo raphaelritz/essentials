@@ -28,6 +28,7 @@ import com.sameerasw.essentials.domain.model.NotificationLightingSweepPosition
 import com.sameerasw.essentials.domain.model.ScaleAnimationsProfile
 import com.sameerasw.essentials.domain.model.TrackedRepo
 import com.sameerasw.essentials.domain.model.github.GitHubUser
+import com.sameerasw.essentials.utils.HostedClock
 import com.sameerasw.essentials.utils.LockScreenClockSize
 import com.sameerasw.essentials.utils.RootUtils
 import com.sameerasw.essentials.utils.ShizukuUtils
@@ -3221,7 +3222,7 @@ class SettingsRepository(
         value: Rect,
     ) = putString(lockClockRectKey(small), value.flattenToString())
 
-    private fun lockClockRectKey(small: Boolean) = if (small) KEY_LOCK_CLOCK_RECT_SMALL else KEY_LOCK_CLOCK_RECT_LARGE
+    private fun lockClockRectKey(small: Boolean) = perClock(if (small) KEY_LOCK_CLOCK_RECT_SMALL else KEY_LOCK_CLOCK_RECT_LARGE)
 
     fun getLockClockAodTop(small: Boolean): Int? = lockClockAodTopKey(small).takeIf(::contains)?.let { getInt(it) }
 
@@ -3230,7 +3231,10 @@ class SettingsRepository(
         value: Int,
     ) = putInt(lockClockAodTopKey(small), value)
 
-    private fun lockClockAodTopKey(small: Boolean) = if (small) KEY_LOCK_CLOCK_AOD_TOP_SMALL else KEY_LOCK_CLOCK_AOD_TOP_LARGE
+    private fun lockClockAodTopKey(small: Boolean) = perClock(if (small) KEY_LOCK_CLOCK_AOD_TOP_SMALL else KEY_LOCK_CLOCK_AOD_TOP_LARGE)
+
+    /** Each clock rests in a rectangle of its own, so what is measured of it is kept under its id. */
+    private fun perClock(key: String) = "$key:${HostedClock.currentClockId(context)}"
 
     fun getLockClockOutline(): Boolean = getBoolean(KEY_LOCK_CLOCK_OUTLINE, false)
 
@@ -3303,17 +3307,17 @@ class SettingsRepository(
         field: String,
     ) = if (slot.isEmpty()) "lock_clock_$field" else "lock_clock_${slot}_$field"
 
-    fun getLockClockSwapSlide(): Int = getInt(KEY_LOCK_CLOCK_SWAP_SLIDE)
+    fun getLockClockSwapSlide(): Int = getInt(perClock(KEY_LOCK_CLOCK_SWAP_SLIDE))
 
-    fun setLockClockSwapSlide(value: Int) = putInt(KEY_LOCK_CLOCK_SWAP_SLIDE, value)
+    fun setLockClockSwapSlide(value: Int) = putInt(perClock(KEY_LOCK_CLOCK_SWAP_SLIDE), value)
 
     fun getLockClockSwapElapsed(): Long = getLong(KEY_LOCK_CLOCK_SWAP_ELAPSED)
 
     fun setLockClockSwapElapsed(value: Long) = putLong(KEY_LOCK_CLOCK_SWAP_ELAPSED, value)
 
-    fun getLockClockLayoutKey(): String? = getString(KEY_LOCK_CLOCK_LAYOUT_KEY, null)
+    fun getLockClockLayoutKey(): String? = getString(perClock(KEY_LOCK_CLOCK_LAYOUT_KEY), null)
 
-    fun setLockClockLayoutKey(value: String) = putString(KEY_LOCK_CLOCK_LAYOUT_KEY, value)
+    fun setLockClockLayoutKey(value: String) = putString(perClock(KEY_LOCK_CLOCK_LAYOUT_KEY), value)
 
     fun getLockClockSettingsToRestore(): String? = getString(KEY_LOCK_CLOCK_SETTINGS_TO_RESTORE, null)
 

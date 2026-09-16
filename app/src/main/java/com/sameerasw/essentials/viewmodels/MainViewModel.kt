@@ -77,6 +77,7 @@ import com.sameerasw.essentials.services.tiles.ScreenOffAccessibilityService
 import com.sameerasw.essentials.utils.AppIconUtil
 import com.sameerasw.essentials.utils.AppUtil
 import com.sameerasw.essentials.utils.DeviceUtils
+import com.sameerasw.essentials.utils.HostedClock
 import com.sameerasw.essentials.utils.LockClockLayer
 import com.sameerasw.essentials.utils.LockScreenClockSize
 import com.sameerasw.essentials.utils.PermissionUtils
@@ -4228,9 +4229,8 @@ class MainViewModel : ViewModel() {
             coverage != WallpaperImages.Coverage.BOTH &&
             coverage != WallpaperImages.Coverage.HOME_ONLY &&
             !WallpaperImages.isLive(context, WallpaperManager.FLAG_SYSTEM)
-        lockClockSupported.value = LockClockLayer.supports(LockClockLayer.currentClockId(context))
-        lockClockMeasured.value = settingsRepository.getLockClockRect(true) != null && settingsRepository.getLockClockRect(false) != null
-        lockClockMeasuredHere.value = lockClockMeasured.value && settingsRepository.getLockClockLayoutKey() == LockClockMeasurement.layoutKey(context)
+        lockClockSupported.value = LockClockLayer.supports(HostedClock.currentClockId(context))
+        refreshLockClockMeasured(context)
         if (lockClockInWallpaperActive != wasActive) setLockScreenClockId(lockScreenClockId.value ?: "DEFAULT", context)
     }
 
@@ -4558,7 +4558,13 @@ class MainViewModel : ViewModel() {
 
         if (success) {
             lockScreenClockId.value = clockId
+            refreshLockClockMeasured(context)
         }
+    }
+
+    private fun refreshLockClockMeasured(context: Context) {
+        lockClockMeasured.value = settingsRepository.getLockClockRect(true) != null && settingsRepository.getLockClockRect(false) != null
+        lockClockMeasuredHere.value = lockClockMeasured.value && settingsRepository.getLockClockLayoutKey() == LockClockMeasurement.layoutKey(context)
     }
 
     /**

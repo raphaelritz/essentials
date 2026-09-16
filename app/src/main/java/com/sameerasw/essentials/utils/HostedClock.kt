@@ -69,6 +69,7 @@ class HostedClock private constructor(
         private const val PLUGIN_ACTION = "com.android.systemui.action.PLUGIN_CLOCK_PROVIDER"
         private const val SYSTEM_UI = "com.android.systemui"
         private const val CLOCK_FACE_SETTING = "lock_screen_custom_clock_face"
+        private const val DEFAULT_CLOCK = "DEFAULT"
         private const val LARGE_CLOCK_TEXT_SIZE = "large_clock_text_size"
         private const val SMALL_CLOCK_TEXT_SIZE = "small_clock_text_size"
         private const val API_PACKAGE = "com.android.systemui.plugins.keyguard.ui.clocks"
@@ -84,12 +85,10 @@ class HostedClock private constructor(
          */
         private val HOST_PREFIXES = listOf("com.android.systemui.plugin", "com.android.systemui.log", "com.android.systemui.common")
 
-        /** The clock the keyguard is set to, read from the setting SystemUI itself reads. */
-        fun currentClockId(context: Context): String? =
-            runCatching {
-                val json = Settings.Secure.getString(context.contentResolver, CLOCK_FACE_SETTING) ?: return null
-                JSONObject(json).optString("clockId").ifEmpty { null }
-            }.getOrNull()
+        /** The clock the keyguard is set to, read from the setting SystemUI itself reads; its own default when the setting names none. */
+        fun currentClockId(context: Context): String =
+            runCatching { JSONObject(Settings.Secure.getString(context.contentResolver, CLOCK_FACE_SETTING)).getString("clockId").ifEmpty { DEFAULT_CLOCK } }
+                .getOrDefault(DEFAULT_CLOCK)
 
         /** The font axes the keyguard applies to the real clock, straight from the same setting. */
         fun currentAxes(context: Context): Map<String, Float>? =

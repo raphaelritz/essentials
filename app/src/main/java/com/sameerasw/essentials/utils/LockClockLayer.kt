@@ -130,8 +130,6 @@ class LockClockLayer(
 
         fun supports(clockId: String): Boolean = clockId in SUPPORTED_CLOCKS
 
-        fun currentClockId(context: Context): String = HostedClock.currentClockId(context) ?: "DEFAULT"
-
         fun outlines(clockId: String): Boolean = clockId in OUTLINE_CLOCKS
 
         /** The time into the swap at which its eased timeline reaches [eased]. */
@@ -228,7 +226,7 @@ class LockClockLayer(
 
     /** Hosts the keyguard's current clock unless it already is, and brings the time up to date. */
     fun sync() {
-        val clockId = currentClockId(context)
+        val clockId = HostedClock.currentClockId(context)
         if (clockId != hostedFor) host(clockId)
         restyle()
         hosted?.tick()
@@ -238,7 +236,8 @@ class LockClockLayer(
     fun onTimeSettingsChanged() = drop()
 
     fun onPreferenceChanged(key: String) {
-        when (key) {
+        // A measurement's key ends in the id of the clock it was taken for.
+        when (key.substringBefore(':')) {
             SettingsRepository.KEY_LOCK_CLOCK_COMPARE -> {
                 compare = repository.getLockClockCompare()
                 invalidate()
