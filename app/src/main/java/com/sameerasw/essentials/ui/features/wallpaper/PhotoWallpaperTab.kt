@@ -223,6 +223,19 @@ fun PhotoWallpaperTab(
             )
         }
 
+        RoundedCardContainer {
+            IconToggleItem(
+                iconRes = R.drawable.rounded_nest_clock_farsight_analog_24,
+                title = stringResource(R.string.link_lock_screen_clock),
+                description = stringResource(R.string.link_lock_screen_clock_desc),
+                showToggle = false,
+                onClick = {
+                    HapticUtil.performVirtualKeyHaptic(view)
+                    openFeature(context, "Lock screen clock")
+                },
+            )
+        }
+
         Spacer(modifier = Modifier.height(32.dp))
     }
 }

@@ -1587,7 +1587,7 @@
     <!-- Lock Screen Clock -->
     <string name="feat_lock_screen_clock_title">Lock screen clock</string>
     <string name="feat_lock_screen_clock_desc">Customize lock screen clock on Pixels</string>
-    <string name="about_desc_lock_screen_clock">Change the lock screen clock style on Pixels. Select from the available clock faces provided by the System UI. Some old styles might not be available.</string>
+    <string name="about_desc_lock_screen_clock">Change the lock screen clock style on Pixels. Select from the available clock faces provided by the System UI. Some old styles might not be available.\n\nThe wallpaper clock draws the clock as part of the Essentials wallpaper instead: the subject of a depth wallpaper can stand in front of it, and it can take colors and materials Android does not offer. It works with the Calligraphy style so far and needs a one-time measurement of where the system puts the clock. Hide clock on its own makes room for depth wallpapers from other apps.</string>
     <string name="lock_screen_clock_bignum">Big Number</string>
     <string name="lock_screen_clock_calligraphy">Calligraphy</string>
     <string name="lock_screen_clock_flex">Flex</string>

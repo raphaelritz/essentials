@@ -9,6 +9,7 @@
 
 package com.sameerasw.essentials.ui.features.system
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -25,17 +26,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,13 +55,18 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.sameerasw.essentials.R
+import com.sameerasw.essentials.ui.activities.WallpaperActivity
 import com.sameerasw.essentials.ui.components.sliders.ConfigSliderItem
 import com.sameerasw.essentials.ui.core.cards.IconToggleItem
 import com.sameerasw.essentials.ui.core.containers.RoundedCardContainer
 import com.sameerasw.essentials.ui.core.pickers.SegmentedPicker
 import com.sameerasw.essentials.ui.modifiers.highlight
+import com.sameerasw.essentials.ui.core.sheets.PermissionsBottomSheet
 import com.sameerasw.essentials.utils.HapticUtil
+import com.sameerasw.essentials.utils.LockClockLayer
 import com.sameerasw.essentials.utils.LockScreenClockSize
+import com.sameerasw.essentials.utils.PermissionUIHelper
+import com.sameerasw.essentials.utils.WallpaperImages
 import com.sameerasw.essentials.viewmodels.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -70,6 +80,58 @@ fun LockScreenClockSettingsUI(
     val view = LocalView.current
     val currentClockId by viewModel.lockScreenClockId
     val isDark = isSystemInDarkTheme()
+
+    val coverage by viewModel.wallpaperCoverage
+    val clockEnabled by viewModel.lockClockInWallpaper
+    val clockSupported by viewModel.lockClockSupported
+    val clockMeasured by viewModel.lockClockMeasured
+    val clockMeasuredHere by viewModel.lockClockMeasuredHere
+    val accessibilityEnabled by viewModel.isAccessibilityEnabled
+    val notificationsEnabled by viewModel.isNotificationListenerEnabled
+    val clockInWallpaper = viewModel.lockClockInWallpaperActive
+    var requestingPermissionsFor by remember { mutableStateOf<Pair<Int, List<String>>?>(null) }
+    var styleToConfirm by remember { mutableStateOf<ClockOption?>(null) }
+    val missingPermissions =
+        listOfNotNull(
+            "ACCESSIBILITY".takeIf { !accessibilityEnabled },
+            "NOTIFICATION_LISTENER".takeIf { !notificationsEnabled },
+        )
+    val wallpaperReady = coverage == WallpaperImages.Coverage.BOTH
+    val measurable = wallpaperReady && missingPermissions.isEmpty() && clockSupported
+    val stepsDone = measurable && clockMeasured
+
+    requestingPermissionsFor?.let { (title, keys) ->
+        PermissionsBottomSheet(
+            onDismissRequest = {
+                requestingPermissionsFor = null
+                viewModel.check(context)
+            },
+            featureTitle = title,
+            permissions = PermissionUIHelper.getPermissionItems(keys, context, viewModel),
+        )
+    }
+
+    styleToConfirm?.let { option ->
+        AlertDialog(
+            onDismissRequest = { styleToConfirm = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    styleToConfirm = null
+                    viewModel.setLockClockInWallpaper(false, context)
+                    viewModel.setLockScreenClockId(option.id, context)
+                }) {
+                    Text(stringResource(R.string.lock_clock_turn_off_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { styleToConfirm = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+            title = { Text(stringResource(R.string.lock_clock_turn_off_title)) },
+            text = { Text(stringResource(R.string.lock_clock_turn_off_text)) },
+        )
+    }
 
     val inversionMatrix =
         remember {
@@ -204,6 +266,7 @@ fun LockScreenClockSettingsUI(
             val option = clockOptions[index]
             val isSelected =
                 if (option.id == "DEFAULT") isDefaultStyleSelected else currentClockId == option.id
+            val supported = !clockInWallpaper || LockClockLayer.supports(option.id)
 
             Box(
                 modifier =
@@ -212,10 +275,12 @@ fun LockScreenClockSettingsUI(
                         .padding(vertical = 4.dp)
                         .maskClip(MaterialTheme.shapes.large)
                         .background(if (isDark) Color.White else MaterialTheme.colorScheme.surfaceBright)
-                        .pointerInput(option) {
+                        .pointerInput(option, supported) {
                             detectTapGestures {
                                 HapticUtil.performUIHaptic(view)
-                                if (option.id == "DEFAULT") {
+                                if (!supported) {
+                                    styleToConfirm = option
+                                } else if (option.id == "DEFAULT") {
                                     if (!isDefaultStyleSelected) {
                                         viewModel.setLockScreenClockId("DEFAULT", context)
                                     }
@@ -352,8 +417,9 @@ fun LockScreenClockSettingsUI(
                 iconRes = R.drawable.rounded_visibility_off_24,
                 title = stringResource(R.string.lock_screen_clock_hide_title),
                 modifier = Modifier.highlight(highlightSetting == "lock_screen_clock_hide"),
-                description = stringResource(R.string.lock_screen_clock_hide_desc),
-                isChecked = viewModel.lockScreenClockHidden.value,
+                description = stringResource(if (clockInWallpaper) R.string.lock_screen_clock_hide_forced_desc else R.string.lock_screen_clock_hide_desc),
+                isChecked = viewModel.lockScreenClockHidden.value || clockInWallpaper,
+                enabled = !clockInWallpaper,
                 onCheckedChange = { viewModel.setLockScreenClockHidden(it, context) },
             )
             IconToggleItem(
@@ -398,21 +464,120 @@ fun LockScreenClockSettingsUI(
             )
         }
 
-        // About Section
+        Text(
+            text = stringResource(R.string.lock_clock_section),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         RoundedCardContainer {
+            SetupStep(
+                done = wallpaperReady,
+                iconRes = R.drawable.rounded_wallpaper_24,
+                title = stringResource(R.string.essentials_wallpaper_title),
+                description =
+                    stringResource(
+                        when (coverage) {
+                            WallpaperImages.Coverage.BOTH -> R.string.essentials_wallpaper_active
+                            WallpaperImages.Coverage.HOME_ONLY -> R.string.essentials_wallpaper_home_only
+                            WallpaperImages.Coverage.LOCK_ONLY -> R.string.essentials_wallpaper_lock_only
+                            WallpaperImages.Coverage.NONE -> R.string.lock_clock_needs_wallpaper
+                        },
+                    ),
+                onClick = {
+                    HapticUtil.performVirtualKeyHaptic(view)
+                    context.startActivity(Intent(context, WallpaperActivity::class.java).putExtra("tab", "photo"))
+                },
+            )
+            SetupStep(
+                done = missingPermissions.isEmpty(),
+                iconRes = R.drawable.rounded_accessibility_new_24,
+                title = stringResource(R.string.lock_clock_step_permissions),
+                description = stringResource(if (missingPermissions.isEmpty()) R.string.lock_clock_step_granted else R.string.lock_clock_step_grant),
+                onClick = {
+                    HapticUtil.performVirtualKeyHaptic(view)
+                    if (missingPermissions.isNotEmpty()) requestingPermissionsFor = Pair(R.string.lock_clock_section, missingPermissions)
+                },
+            )
+            val supportedOption = clockOptions.first { LockClockLayer.supports(it.id) }
+            SetupStep(
+                done = clockSupported,
+                iconRes = R.drawable.rounded_nest_clock_farsight_analog_24,
+                title = stringResource(R.string.lock_clock_step_style, stringResource(supportedOption.nameRes)),
+                description = stringResource(if (clockSupported) R.string.lock_clock_step_selected else R.string.lock_clock_step_select),
+                onClick = {
+                    HapticUtil.performVirtualKeyHaptic(view)
+                    viewModel.setLockScreenClockId(supportedOption.id, context)
+                },
+            )
+            SetupStep(
+                done = clockMeasuredHere,
+                modifier = Modifier.highlight(highlightSetting == "lock_clock_measure"),
+                iconRes = R.drawable.rounded_refresh_24,
+                title = stringResource(R.string.lock_clock_measure_title),
+                description =
+                    stringResource(
+                        when {
+                            !measurable -> R.string.lock_clock_steps_pending
+                            !clockMeasured -> R.string.lock_clock_measure_desc
+                            !clockMeasuredHere -> R.string.lock_clock_measure_stale
+                            else -> R.string.lock_clock_measured
+                        },
+                    ),
+                enabled = measurable,
+                onClick = { viewModel.measureLockClock(context) },
+            )
             IconToggleItem(
-                iconRes = R.drawable.rounded_info_24,
-                title = stringResource(R.string.about_title),
-                description = stringResource(R.string.about_desc_lock_screen_clock),
-                isChecked = false,
-                onCheckedChange = {},
-                showToggle = false,
+                iconRes = R.drawable.rounded_lock_clock_24,
+                modifier = Modifier.highlight(highlightSetting == "lock_clock_in_wallpaper"),
+                title = stringResource(R.string.lock_clock_in_wallpaper_title),
+                description =
+                    stringResource(
+                        when {
+                            !stepsDone -> R.string.lock_clock_steps_pending
+                            clockEnabled -> R.string.lock_clock_on
+                            else -> R.string.lock_clock_ready
+                        },
+                    ),
+                isChecked = clockEnabled && stepsDone,
+                enabled = stepsDone,
+                onCheckedChange = {
+                    HapticUtil.performVirtualKeyHaptic(view)
+                    viewModel.setLockClockInWallpaper(it, context)
+                },
             )
         }
+
+        Text(
+            text = stringResource(R.string.lock_clock_intro),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         Spacer(modifier = Modifier.height(32.dp))
     }
 }
+
+@Composable
+private fun SetupStep(
+    done: Boolean,
+    iconRes: Int,
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) = IconToggleItem(
+    iconRes = if (done) R.drawable.rounded_check_circle_24 else iconRes,
+    title = title,
+    modifier = modifier,
+    description = description,
+    showToggle = false,
+    enabled = enabled,
+    onClick = onClick,
+)
 
 @Composable
 fun ColorCircle(
