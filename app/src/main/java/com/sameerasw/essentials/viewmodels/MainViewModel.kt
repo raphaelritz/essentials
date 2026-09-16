@@ -4361,6 +4361,13 @@ class MainViewModel : ViewModel() {
         settingsRepository.setWallpaperHomeBlur(value)
     }
 
+    /** Measures where the keyguard puts each clock face; the phone locks and wakes itself for it. */
+    fun measureLockClock(context: Context) {
+        val lockClock = ScreenOffAccessibilityService.instance?.lockClock ?: return
+        Toast.makeText(context, R.string.lock_clock_measure_toast, Toast.LENGTH_LONG).show()
+        lockClock.measure()
+    }
+
     /**
      * Opens the system live-wallpaper preview for Essentials' own wallpaper. Setting a live
      * wallpaper component silently needs a system permission, so the user confirms it here.

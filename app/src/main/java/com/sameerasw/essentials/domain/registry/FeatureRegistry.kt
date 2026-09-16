@@ -415,6 +415,16 @@ object FeatureRegistry {
                             R.string.search_lock_screen_clock_size_desc,
                             "lock_screen_clock_size",
                         ),
+                        SearchSetting(
+                            R.string.lock_clock_in_wallpaper_title,
+                            R.string.search_lock_clock_in_wallpaper_desc,
+                            "lock_clock_in_wallpaper",
+                        ),
+                        SearchSetting(
+                            R.string.lock_clock_measure_title,
+                            R.string.lock_clock_measure_desc,
+                            "lock_clock_measure",
+                        ),
                     ),
                 showToggle = false,
                 parentFeatureId = "Display",

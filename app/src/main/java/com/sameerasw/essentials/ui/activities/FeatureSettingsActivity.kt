@@ -195,6 +195,9 @@ class FeatureSettingsActivity : AppCompatActivity() {
                             if (featureId == "Watch") {
                                 watchViewModel.check(context)
                             }
+                            if (featureId == "Lock screen clock") {
+                                viewModel.refreshWallpaperState(context)
+                            }
                         }
                     }
                 lifecycleOwner.lifecycle.addObserver(observer)
