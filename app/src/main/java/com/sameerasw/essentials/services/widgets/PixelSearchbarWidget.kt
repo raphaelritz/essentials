@@ -9,8 +9,11 @@
 
 package com.sameerasw.essentials.services.widgets
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.graphics.BitmapFactory
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,6 +22,7 @@ import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalSize
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.AndroidRemoteViews
@@ -33,7 +37,9 @@ import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.ContentScale
 import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
@@ -41,11 +47,40 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.sameerasw.essentials.data.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+/**
+ * Records the searchbar's measured size for [WidgetScraperService].
+ *
+ * Wrapped in a [SideEffect] so the write happens after a successful composition rather than during
+ * one, and [SettingsRepository.setPixelSearchbarWidgetHostSize] ignores an unchanged size, so a
+ * re-render does not loop the service back through a rebind.
+ */
+@Composable
+private fun ReportHostSize(
+    settingsRepository: SettingsRepository,
+    widthDp: Int,
+    heightDp: Int,
+) {
+    SideEffect {
+        // A zero axis means "overridden" — keep whatever is stored for it.
+        val width = if (widthDp > 0) widthDp else settingsRepository.getPixelSearchbarWidgetHostWidth()
+        val height = if (heightDp > 0) heightDp else settingsRepository.getPixelSearchbarWidgetHostHeight()
+        if (width > 0 && height > 0) {
+            settingsRepository.setPixelSearchbarWidgetHostSize(width, height)
+        }
+    }
+}
+
+/** How long a render waits for a fresh scrape before falling back to the placeholder. */
+private const val SCRAPE_WAIT_MS = 2000L
+
+private const val SCRAPE_POLL_MS = 100L
 
 class PixelSearchbarWidget : GlanceAppWidget() {
     override val sizeMode = androidx.glance.appwidget.SizeMode.Exact
@@ -59,6 +94,8 @@ class PixelSearchbarWidget : GlanceAppWidget() {
         val tapActionEnabled = settingsRepository.getPixelSearchbarTapActionEnabled()
         val paddingH = settingsRepository.getPixelSearchbarWidgetPaddingH().dp
         val paddingV = settingsRepository.getPixelSearchbarWidgetPaddingV().dp
+        val widthOverride = settingsRepository.getPixelSearchbarWidgetWidthOverride()
+        val heightOverride = settingsRepository.getPixelSearchbarWidgetHeightOverride()
         val revision = settingsRepository.getPixelSearchbarWidgetRevision()
 
         val musicBitmap =
@@ -73,11 +110,28 @@ class PixelSearchbarWidget : GlanceAppWidget() {
                 null
             }
 
+        // The launcher keeps showing the last RemoteViews across this process's death, so a tree
+        // published before the scrape is back would replace a good render with the placeholder:
+        // wake the scraper and give it a moment.
+        if (type == "widget" &&
+            WidgetScraperService.currentRemoteViews == null &&
+            settingsRepository.getPixelSearchbarWidgetId() != AppWidgetManager.INVALID_APPWIDGET_ID
+        ) {
+            runCatching { WidgetScraperService.start(context) }
+            var waited = 0L
+            while (WidgetScraperService.currentRemoteViews == null && waited < SCRAPE_WAIT_MS) {
+                delay(SCRAPE_POLL_MS)
+                waited += SCRAPE_POLL_MS
+            }
+        }
+
+        // In widget mode the scraped widget carries its own click targets; taps are only claimed for the DIY action.
         val globalTapAction =
-            if (tapActionEnabled) {
-                actionStartActivity(com.sameerasw.essentials.ui.activities.PixelSearchbarTapActivity::class.java)
-            } else {
-                actionStartActivity(PixelSearchResultsActivity::class.java)
+            when {
+                tapActionEnabled ->
+                    actionStartActivity(com.sameerasw.essentials.ui.activities.PixelSearchbarTapActivity::class.java)
+                type == "widget" -> null
+                else -> actionStartActivity(PixelSearchResultsActivity::class.java)
             }
 
         provideContent {
@@ -95,6 +149,19 @@ class PixelSearchbarWidget : GlanceAppWidget() {
                             },
                         )
 
+                if (type == "widget") {
+                    // The scraper hosts the chosen widget off-screen, where it has no size of its
+                    // own. This is the only point where the real searchbar dimensions are known, so
+                    // publish them; the service picks the change up and re-advertises them to the
+                    // provider. Padding is excluded since the scraped layout renders inside it.
+                    val size = LocalSize.current
+                    ReportHostSize(
+                        settingsRepository = settingsRepository,
+                        widthDp = if (widthOverride > 0) 0 else (size.width - paddingH * 2).value.toInt(),
+                        heightDp = if (heightOverride > 0) 0 else (size.height - paddingV * 2).value.toInt(),
+                    )
+                }
+
                 when (type) {
                     "empty" -> {
                         Box(
@@ -109,9 +176,14 @@ class PixelSearchbarWidget : GlanceAppWidget() {
                             contentAlignment = Alignment.Center,
                         ) {
                             if (remoteViews != null) {
+                                // An override pins the drawn size; advertising a smaller size to the
+                                // provider only changes what it sends, not how wide it ends up here.
+                                var rvModifier = GlanceModifier.fillMaxSize()
+                                if (widthOverride > 0) rvModifier = rvModifier.width(widthOverride.dp)
+                                if (heightOverride > 0) rvModifier = rvModifier.height(heightOverride.dp)
                                 AndroidRemoteViews(
                                     remoteViews = remoteViews,
-                                    modifier = GlanceModifier.fillMaxSize(),
+                                    modifier = rvModifier,
                                 )
                             } else {
                                 Text(

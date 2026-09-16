@@ -20,7 +20,9 @@ class AppBootReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED ||
+            intent.action == "android.intent.action.QUICKBOOT_POWERON"
+        ) {
             Log.d("AppBootReceiver", "Device rebooted, starting essential services")
             ServiceUtils.startRequiredServices(context)
         }

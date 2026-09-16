@@ -57,6 +57,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sameerasw.essentials.domain.HapticFeedbackType
 import com.sameerasw.essentials.domain.registry.FeatureRegistry
+import com.sameerasw.essentials.ui.activities.PixelSearchbarSettingsUI
 import com.sameerasw.essentials.ui.components.EssentialsFloatingToolbar
 import com.sameerasw.essentials.ui.components.animations.LottieFeatureAnimation
 import com.sameerasw.essentials.ui.components.linkActions.LinkPickerScreen
@@ -1216,6 +1217,14 @@ class FeatureSettingsActivity : AppCompatActivity() {
 
                                     "Other customizations" -> {
                                         OtherCustomizationsSettingsUI(
+                                            viewModel = viewModel,
+                                            modifier = Modifier.padding(top = 16.dp),
+                                            highlightSetting = highlightSetting,
+                                        )
+                                    }
+
+                                    "Pixel Searchbar" -> {
+                                        PixelSearchbarSettingsUI(
                                             viewModel = viewModel,
                                             modifier = Modifier.padding(top = 16.dp),
                                             highlightSetting = highlightSetting,

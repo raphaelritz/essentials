@@ -69,6 +69,7 @@ import com.sameerasw.essentials.services.NotificationLightingService
 import com.sameerasw.essentials.services.receivers.FlashlightActionReceiver
 import com.sameerasw.essentials.services.receivers.SecurityDeviceAdminReceiver
 import com.sameerasw.essentials.services.tiles.ScreenOffAccessibilityService
+import com.sameerasw.essentials.services.widgets.WidgetScraperService
 import com.sameerasw.essentials.utils.AppIconUtil
 import com.sameerasw.essentials.utils.AppUtil
 import com.sameerasw.essentials.utils.DeviceUtils
@@ -276,6 +277,9 @@ class MainViewModel : ViewModel() {
     val pixelSearchbarScrapedLine2 = mutableStateOf("")
     val pixelSearchbarWidgetPaddingH = mutableIntStateOf(0)
     val pixelSearchbarWidgetPaddingV = mutableIntStateOf(0)
+    val pixelSearchbarWidgetWidthOverride = mutableIntStateOf(0)
+    val pixelSearchbarWidgetHeightOverride = mutableIntStateOf(0)
+    val pixelSearchbarKeepAlive = mutableStateOf(true)
     val pixelSearchbarTapActionEnabled = mutableStateOf(true)
     val pixelSearchbarMusicTitle = mutableStateOf("")
     val pixelSearchbarMusicArtist = mutableStateOf("")
@@ -1553,6 +1557,11 @@ class MainViewModel : ViewModel() {
             settingsRepository.getPixelSearchbarWidgetPaddingH()
         pixelSearchbarWidgetPaddingV.intValue =
             settingsRepository.getPixelSearchbarWidgetPaddingV()
+        pixelSearchbarWidgetWidthOverride.intValue =
+            settingsRepository.getPixelSearchbarWidgetWidthOverride()
+        pixelSearchbarWidgetHeightOverride.intValue =
+            settingsRepository.getPixelSearchbarWidgetHeightOverride()
+        pixelSearchbarKeepAlive.value = settingsRepository.getPixelSearchbarKeepAlive()
         pixelSearchbarTapActionEnabled.value =
             settingsRepository.getPixelSearchbarTapActionEnabled()
         pixelSearchbarMusicTitle.value =
@@ -3946,6 +3955,52 @@ class MainViewModel : ViewModel() {
      * @param value [Int] Target value.
      * @param context [Context] Target context.
      */
+    /**
+     * Sets whether the scraper stays in the foreground so provider updates arrive immediately.
+     *
+     * @param value [Boolean] Target value.
+     * @param context [Context] Target context.
+     */
+    fun setPixelSearchbarKeepAlive(
+        value: Boolean,
+        context: Context,
+    ) {
+        pixelSearchbarKeepAlive.value = value
+        settingsRepository.setPixelSearchbarKeepAlive(value)
+        // Re-enter onStartCommand so the service promotes or demotes itself right away.
+        WidgetScraperService.start(context)
+    }
+
+    /**
+     * Sets a manual width override in dp for the scraped widget; 0 restores the measured size.
+     *
+     * @param value [Int] Target value.
+     * @param context [Context] Target context.
+     */
+    fun setPixelSearchbarWidgetWidthOverride(
+        value: Int,
+        context: Context,
+    ) {
+        pixelSearchbarWidgetWidthOverride.intValue = value
+        settingsRepository.setPixelSearchbarWidgetWidthOverride(value)
+        updatePixelSearchbarWidget(context)
+    }
+
+    /**
+     * Sets a manual height override in dp for the scraped widget; 0 restores the measured size.
+     *
+     * @param value [Int] Target value.
+     * @param context [Context] Target context.
+     */
+    fun setPixelSearchbarWidgetHeightOverride(
+        value: Int,
+        context: Context,
+    ) {
+        pixelSearchbarWidgetHeightOverride.intValue = value
+        settingsRepository.setPixelSearchbarWidgetHeightOverride(value)
+        updatePixelSearchbarWidget(context)
+    }
+
     fun setPixelSearchbarWidgetPaddingH(
         value: Int,
         context: Context,
@@ -4115,6 +4170,66 @@ class MainViewModel : ViewModel() {
      *
      * @param context [Context] Target context.
      */
+    private val SERVICE_RESTART_DELAY_MS = 600L
+
+    private val PROVIDER_TOGGLE_DELAY_MS = 900L
+
+    /**
+     * Re-applies every layer of the searchbar replacement in one action, so a settings change takes
+     * effect without switching the style away and back.
+     *
+     * Order matters: re-scrape and refresh the Glance widget first, then restart the launcher last,
+     * so it comes back up to already-fresh content.
+     *
+     * @param context [Context] Target context.
+     */
+    fun refreshPixelSearchbar(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val type = settingsRepository.getPixelSearchbarType()
+
+                if (!isPixelSearchbarEnabled.value) return@launch
+
+                if (type == "widget" || type == "music") {
+                    WidgetScraperService.stop(context)
+                }
+
+                // Writing selected_search_engine its current value changes nothing: the settings
+                // provider drops an unchanged write, so no observer fires and the launcher rebuilds
+                // an identical search slot. Only a real value change makes it re-bind, which is why
+                // switching the provider to Google and back is the manual workaround. Do exactly
+                // that, off then on, each step restarting the launcher.
+                applyPixelSearchbarSetting(context, false)
+                delay(PROVIDER_TOGGLE_DELAY_MS)
+
+                if (type == "widget" || type == "music") {
+                    if (type == "widget") {
+                        // Make the next render republish its measured size.
+                        settingsRepository.setPixelSearchbarWidgetHostSize(0, 0)
+                    }
+                    WidgetScraperService.start(context)
+                    // Give the provider a moment to push a fresh scrape before the launcher comes
+                    // back up, so it starts with current content rather than the placeholder.
+                    delay(SERVICE_RESTART_DELAY_MS)
+                }
+
+                applyPixelSearchbarSetting(context, true)
+                updatePixelSearchbarWidget(context)
+
+                withContext(Dispatchers.Main) {
+                    Toast
+                        .makeText(
+                            context,
+                            context.getString(R.string.pixel_searchbar_refresh_done),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     fun updatePixelSearchbarWidget(context: Context) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
