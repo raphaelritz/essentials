@@ -12,6 +12,7 @@ package com.sameerasw.essentials.viewmodels
 import android.Manifest
 import android.app.Activity
 import android.app.ActivityManager
+import android.app.WallpaperManager
 import android.app.admin.DevicePolicyManager
 import android.content.BroadcastReceiver
 import android.content.ComponentName
@@ -67,6 +68,7 @@ import com.sameerasw.essentials.domain.registry.SearchRegistry
 import com.sameerasw.essentials.services.AppUpdateWorker
 import com.sameerasw.essentials.services.CaffeinateWakeLockService
 import com.sameerasw.essentials.services.NotificationLightingService
+import com.sameerasw.essentials.services.UnifiedWallpaperService
 import com.sameerasw.essentials.services.receivers.FlashlightActionReceiver
 import com.sameerasw.essentials.services.receivers.SecurityDeviceAdminReceiver
 import com.sameerasw.essentials.services.tiles.ScreenOffAccessibilityService
@@ -80,6 +82,7 @@ import com.sameerasw.essentials.utils.ShellUtils
 import com.sameerasw.essentials.utils.ShizukuUtils
 import com.sameerasw.essentials.utils.SurfaceFlingerControl
 import com.sameerasw.essentials.utils.UpdateNotificationHelper
+import com.sameerasw.essentials.utils.WallpaperBlurUtil
 import com.sameerasw.essentials.utils.WallpaperImages
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -89,6 +92,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.time.LocalDateTime
 
 class MainViewModel : ViewModel() {
@@ -290,6 +294,15 @@ class MainViewModel : ViewModel() {
     val lockScreenClockColorTone = mutableIntStateOf(75)
     val lockScreenClockSelectedColorId = mutableStateOf("DEFAULT")
     val lockScreenClockSeedColor = mutableIntStateOf(0)
+    val wallpaperCoverage = mutableStateOf(WallpaperImages.Coverage.NONE)
+    val wallpaperLockImage = mutableStateOf(SettingsRepository.WALLPAPER_IMAGE_SYSTEM)
+    val wallpaperHomeImage = mutableStateOf(SettingsRepository.WALLPAPER_IMAGE_LOCK)
+    val wallpaperLockBlur = mutableFloatStateOf(0f)
+    val wallpaperHomeBlur = mutableFloatStateOf(0f)
+
+    /** Whether the system's own image on that screen can still be copied in: not ours yet, and not a live wallpaper. */
+    val wallpaperLockKeepable = mutableStateOf(false)
+    val wallpaperHomeKeepable = mutableStateOf(false)
 
     // Live Wallpaper
     val liveWallpaperSelectedVideo = mutableStateOf(SettingsRepository.LIVE_WALLPAPER_DEFAULT_VIDEO)
@@ -1572,6 +1585,10 @@ class MainViewModel : ViewModel() {
         lockScreenClockSelectedColorId.value =
             settingsRepository.getLockScreenClockSelectedColorId()
         lockScreenClockSeedColor.intValue = settingsRepository.getLockScreenClockSeedColor()
+        wallpaperLockImage.value = settingsRepository.getWallpaperLockImage()
+        wallpaperHomeImage.value = settingsRepository.getWallpaperHomeImage()
+        wallpaperLockBlur.floatValue = settingsRepository.getWallpaperLockBlur()
+        wallpaperHomeBlur.floatValue = settingsRepository.getWallpaperHomeBlur()
         loadShutUpConfigs()
         recentSearches.value = settingsRepository.getRecentSearches()
         loadCachedWallpaper()
@@ -4135,6 +4152,177 @@ class MainViewModel : ViewModel() {
         }
     }
 
+
+    /** Reads what the system shows on each screen. */
+    fun refreshWallpaperState(context: Context) {
+        val coverage = WallpaperImages.coverage(context)
+        wallpaperCoverage.value = coverage
+        wallpaperLockKeepable.value =
+            coverage != WallpaperImages.Coverage.BOTH &&
+            coverage != WallpaperImages.Coverage.LOCK_ONLY &&
+            !WallpaperImages.isLive(context, WallpaperManager.FLAG_LOCK)
+        wallpaperHomeKeepable.value =
+            coverage != WallpaperImages.Coverage.BOTH &&
+            coverage != WallpaperImages.Coverage.HOME_ONLY &&
+            !WallpaperImages.isLive(context, WallpaperManager.FLAG_SYSTEM)
+    }
+
+    /**
+     * Copies what the system shows today into the lock and home images, so taking over the drawing
+     * changes nothing on screen. A live wallpaper has no image to copy; [onReady] says whether a lock
+     * image exists afterwards, and the picker has to supply one when not.
+     */
+    fun prepareEssentialsWallpaper(
+        context: Context,
+        onReady: (Boolean) -> Unit,
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (WallpaperImages.coverage(context) == WallpaperImages.Coverage.NONE) {
+                WallpaperImages.captureSystem(context, WallpaperManager.FLAG_LOCK)?.let {
+                    WallpaperImages.save(WallpaperImages.lockFile(context), it)
+                    settingsRepository.setWallpaperLockImage(SettingsRepository.WALLPAPER_IMAGE_SYSTEM)
+                }
+                val shared = WallpaperManager.getInstance(context).getWallpaperId(WallpaperManager.FLAG_LOCK) < 0
+                val home = if (shared) null else WallpaperImages.captureSystem(context, WallpaperManager.FLAG_SYSTEM)
+                if (home != null) {
+                    WallpaperImages.save(WallpaperImages.homeFile(context), home)
+                    settingsRepository.setWallpaperHomeImage(SettingsRepository.WALLPAPER_IMAGE_SYSTEM)
+                } else {
+                    settingsRepository.setWallpaperHomeImage(SettingsRepository.WALLPAPER_IMAGE_LOCK)
+                }
+                settingsRepository.bumpWallpaperRevision()
+            }
+            withContext(Dispatchers.Main) {
+                wallpaperLockImage.value = settingsRepository.getWallpaperLockImage()
+                wallpaperHomeImage.value = settingsRepository.getWallpaperHomeImage()
+                onReady(WallpaperImages.lockFile(context).exists())
+            }
+        }
+    }
+
+    /**
+     * Hands the screens back to the system as still images of what Essentials was drawing, blur
+     * included, so nothing changes on screen except that it stops being live.
+     */
+    fun disableEssentialsWallpaper(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val manager = WallpaperManager.getInstance(context)
+            val lockBlur = settingsRepository.getWallpaperLockBlur()
+            val homeBlur = settingsRepository.getWallpaperHomeBlur()
+            val sameImage = settingsRepository.getWallpaperHomeImage() == SettingsRepository.WALLPAPER_IMAGE_LOCK
+            val lock = still(WallpaperImages.lockFile(context), lockBlur)
+            val home = if (sameImage) still(WallpaperImages.lockFile(context), homeBlur) else still(WallpaperImages.homeFile(context), homeBlur) ?: lock
+            try {
+                when {
+                    lock == null -> manager.clear(WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
+                    sameImage && lockBlur == homeBlur -> manager.setBitmap(lock, null, true, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
+                    else -> {
+                        home?.let { manager.setBitmap(it, null, true, WallpaperManager.FLAG_SYSTEM) }
+                        manager.setBitmap(lock, null, true, WallpaperManager.FLAG_LOCK)
+                    }
+                }
+            } catch (e: IOException) {
+                Log.w("MainViewModel", "Could not hand the wallpaper back to the system", e)
+                withContext(Dispatchers.Main) { Toast.makeText(context, R.string.essentials_wallpaper_release_failed, Toast.LENGTH_SHORT).show() }
+            }
+            withContext(Dispatchers.Main) { refreshWallpaperState(context) }
+        }
+    }
+
+    private fun still(
+        file: File,
+        blur: Float,
+    ): Bitmap? {
+        val source = BitmapFactory.decodeFile(file.absolutePath) ?: return null
+        return WallpaperBlurUtil.blur(source, blur) ?: source
+    }
+
+    /** The lock image: the system's own when [uri] is null, otherwise the picked photo. */
+    fun setWallpaperLockImage(
+        context: Context,
+        uri: Uri?,
+        onDone: () -> Unit = {},
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val saved = saveWallpaperImage(context, WallpaperImages.lockFile(context), WallpaperManager.FLAG_LOCK, uri)
+            if (saved) {
+                settingsRepository.setWallpaperLockImage(if (uri == null) SettingsRepository.WALLPAPER_IMAGE_SYSTEM else SettingsRepository.WALLPAPER_IMAGE_PHOTO)
+            }
+            withContext(Dispatchers.Main) {
+                wallpaperLockImage.value = settingsRepository.getWallpaperLockImage()
+                if (saved) onDone() else Toast.makeText(context, R.string.wallpaper_image_unavailable, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    /** The home image: the lock image, the system's own, or a picked photo. */
+    fun setWallpaperHomeImage(
+        context: Context,
+        kind: String,
+        uri: Uri? = null,
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val saved =
+                kind == SettingsRepository.WALLPAPER_IMAGE_LOCK ||
+                    saveWallpaperImage(context, WallpaperImages.homeFile(context), WallpaperManager.FLAG_SYSTEM, uri)
+            if (saved) settingsRepository.setWallpaperHomeImage(kind)
+            withContext(Dispatchers.Main) {
+                wallpaperHomeImage.value = settingsRepository.getWallpaperHomeImage()
+                if (!saved) Toast.makeText(context, R.string.wallpaper_image_unavailable, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun saveWallpaperImage(
+        context: Context,
+        file: File,
+        which: Int,
+        uri: Uri?,
+    ): Boolean {
+        val bitmap =
+            if (uri == null) {
+                WallpaperImages.captureSystem(context, which)
+            } else {
+                WallpaperImages.decode(context, uri)?.let { WallpaperImages.cropToScreen(context, it) }
+            } ?: return false
+        WallpaperImages.save(file, bitmap)
+        settingsRepository.bumpWallpaperRevision()
+        return true
+    }
+
+    fun setWallpaperLockBlur(value: Float) {
+        wallpaperLockBlur.floatValue = value
+        settingsRepository.setWallpaperLockBlur(value)
+    }
+
+    fun setWallpaperHomeBlur(value: Float) {
+        wallpaperHomeBlur.floatValue = value
+        settingsRepository.setWallpaperHomeBlur(value)
+    }
+
+    /**
+     * Opens the system live-wallpaper preview for Essentials' own wallpaper. Setting a live
+     * wallpaper component silently needs a system permission, so the user confirms it here.
+     */
+    fun openEssentialsWallpaperPicker(context: Context) {
+        try {
+            val intent =
+                Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+                    putExtra(
+                        WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                        ComponentName(
+                            context,
+                            UnifiedWallpaperService::class.java,
+                        ),
+                    )
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(context, R.string.essentials_wallpaper_failed, Toast.LENGTH_SHORT).show()
+        }
+    }
     /**
      * Executes the set lock screen clock id operation.
      *

@@ -1413,6 +1413,56 @@ object FeatureRegistry {
                 ) {}
             },
             object : Feature(
+                id = "PhotoWallpaper",
+                title = R.string.feat_photo_wallpaper_title,
+                iconRes = R.drawable.rounded_image_24,
+                category = R.string.cat_interface,
+                description = R.string.feat_photo_wallpaper_desc,
+                showToggle = false,
+                isVisibleInMain = false,
+                searchableSettings =
+                    listOf(
+                        SearchSetting(
+                            R.string.essentials_wallpaper_title,
+                            R.string.search_essentials_wallpaper_desc,
+                            "wallpaper_essentials",
+                        ),
+                        SearchSetting(
+                            R.string.search_wallpaper_lock_image_title,
+                            R.string.search_wallpaper_lock_image_desc,
+                            "wallpaper_lock_image",
+                        ),
+                        SearchSetting(
+                            R.string.search_wallpaper_lock_blur_title,
+                            R.string.search_wallpaper_lock_blur_desc,
+                            "wallpaper_lock_blur",
+                        ),
+                        SearchSetting(
+                            R.string.search_wallpaper_home_image_title,
+                            R.string.search_wallpaper_home_image_desc,
+                            "wallpaper_home_image",
+                        ),
+                        SearchSetting(
+                            R.string.search_wallpaper_home_blur_title,
+                            R.string.search_wallpaper_home_blur_desc,
+                            "wallpaper_home_blur",
+                        ),
+                        SearchSetting(
+                            R.string.search_wallpaper_aod_image_title,
+                            R.string.search_wallpaper_aod_image_desc,
+                            "wallpaper_aod_image",
+                        ),
+                    ),
+            ) {
+                override fun isEnabled(viewModel: MainViewModel) = true
+
+                override fun onToggle(
+                    viewModel: MainViewModel,
+                    context: Context,
+                    enabled: Boolean,
+                ) {}
+            },
+            object : Feature(
                 id = "Other customizations",
                 title = R.string.feat_other_customizations_title,
                 iconRes = R.drawable.rounded_home_24,

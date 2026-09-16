@@ -165,8 +165,13 @@ fun WallpaperScreen(
 
     val pagerState =
         rememberPagerState(
-            initialPage = if (initialTab == "live") 1 else 0,
-            pageCount = { 2 },
+            initialPage =
+                when (initialTab) {
+                    "live" -> 1
+                    "photo" -> 2
+                    else -> 0
+                },
+            pageCount = { 3 },
         )
 
     val pickerLauncher =
@@ -373,7 +378,7 @@ fun WallpaperScreen(
                 horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                val tabs = listOf(0, 1)
+                val tabs = listOf(0, 1, 2)
                 tabs.forEachIndexed { index, page ->
                     ToggleButton(
                         checked = pagerState.currentPage == page,
@@ -386,14 +391,20 @@ fun WallpaperScreen(
                         shapes =
                             when (index) {
                                 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                                else -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                tabs.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
                             },
                         modifier = Modifier.size(width = 80.dp, height = 48.dp),
                     ) {
                         Icon(
                             painter =
                                 painterResource(
-                                    id = if (page == 0) R.drawable.rounded_wallpaper_24 else R.drawable.rounded_slow_motion_video_24,
+                                    id =
+                                        when (page) {
+                                            0 -> R.drawable.rounded_wallpaper_24
+                                            1 -> R.drawable.rounded_slow_motion_video_24
+                                            else -> R.drawable.rounded_image_24
+                                        },
                                 ),
                             contentDescription = null,
                             modifier = Modifier.size(24.dp),
@@ -565,7 +576,7 @@ fun WallpaperScreen(
                             )
                         }
                     }
-                } else {
+                } else if (page == 1) {
                     val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
                     Box(
                         modifier =
@@ -631,6 +642,15 @@ fun WallpaperScreen(
                             }
                         }
                     }
+                } else {
+                    PhotoWallpaperTab(
+                        viewModel = viewModel,
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(top = statusBarHeight + 96.dp, bottom = bottomPadding + 96.dp),
+                    )
                 }
             }
 
@@ -1167,6 +1187,17 @@ fun WallpaperHelpBottomSheet(
                         }
                     }
                 }
+            } else if (selectedTab == 2) {
+                Text(
+                    text = stringResource(R.string.feat_photo_wallpaper_title),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                )
+
+                Text(
+                    text = stringResource(R.string.feat_photo_wallpaper_desc),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             } else {
                 Text(
                     text = stringResource(R.string.feat_live_wallpaper_title),

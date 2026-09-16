@@ -9,6 +9,8 @@
 
 package com.sameerasw.essentials.ui.features.system
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -60,14 +62,12 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sameerasw.essentials.R
-import com.sameerasw.essentials.ui.components.menus.SegmentedDropdownMenu
+import com.sameerasw.essentials.ui.activities.WallpaperActivity
 import com.sameerasw.essentials.ui.components.menus.SegmentedDropdownMenuItem
 import com.sameerasw.essentials.ui.components.sliders.ConfigSliderItem
 import com.sameerasw.essentials.ui.core.cards.ConfigPickerItem
@@ -187,18 +187,6 @@ fun AlwaysOnDisplaySettingsUI(
             java.text.SimpleDateFormat(pattern, java.util.Locale.getDefault()).format(cal.time)
         }
 
-        var isPreviewMenuExpanded by remember { mutableStateOf(false) }
-        val hasCustomImage = viewModel.hasAodWallpaperCustomImage.value
-
-        val photoPickerLauncher =
-            rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.GetContent(),
-            ) { uri ->
-                uri?.let {
-                    viewModel.setCustomAodWallpaper(context, it)
-                }
-            }
-
         RoundedCardContainer {
             AnimatedVisibility(
                 visible = isWallpaperEnabled,
@@ -212,7 +200,7 @@ fun AlwaysOnDisplaySettingsUI(
                         .background(Color.Black)
                         .clickable {
                             HapticUtil.performVirtualKeyHaptic(view)
-                            isPreviewMenuExpanded = true
+                            openWallpaperPhotos(context)
                         },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -281,42 +269,6 @@ fun AlwaysOnDisplaySettingsUI(
                         }
                     }
 
-                    SegmentedDropdownMenu(
-                        expanded = isPreviewMenuExpanded,
-                        onDismissRequest = { isPreviewMenuExpanded = false },
-                    ) {
-                        SegmentedDropdownMenuItem(
-                            text = { Text(stringResource(R.string.feat_aod_wallpaper_pick_image)) },
-                            onClick = {
-                                HapticUtil.performVirtualKeyHaptic(view)
-                                isPreviewMenuExpanded = false
-                                photoPickerLauncher.launch("image/*")
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    painter = painterResource(R.drawable.rounded_image_24),
-                                    contentDescription = null,
-                                )
-                            },
-                        )
-
-                        if (hasCustomImage) {
-                            SegmentedDropdownMenuItem(
-                                text = { Text(stringResource(R.string.feat_aod_wallpaper_remove_custom_image)) },
-                                onClick = {
-                                    HapticUtil.performVirtualKeyHaptic(view)
-                                    isPreviewMenuExpanded = false
-                                    viewModel.removeCustomAodWallpaper(context)
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        painter = painterResource(R.drawable.rounded_delete_24),
-                                        contentDescription = null,
-                                    )
-                                },
-                            )
-                        }
-                    }
                 }
             }
 
@@ -350,6 +302,16 @@ fun AlwaysOnDisplaySettingsUI(
                     }
                 },
                 modifier = Modifier.highlight(highlightSetting == "aod_wallpaper"),
+            )
+            IconToggleItem(
+                iconRes = R.drawable.rounded_image_24,
+                title = stringResource(R.string.link_wallpaper_images),
+                description = stringResource(R.string.link_wallpaper_images_desc),
+                showToggle = false,
+                onClick = {
+                    HapticUtil.performVirtualKeyHaptic(view)
+                    openWallpaperPhotos(context)
+                },
             )
 
             AnimatedVisibility(
@@ -654,3 +616,5 @@ fun AlwaysOnDisplaySettingsUI(
         }
     }
 }
+
+private fun openWallpaperPhotos(context: Context) = context.startActivity(Intent(context, WallpaperActivity::class.java).putExtra("tab", "photo"))
