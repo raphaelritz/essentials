@@ -14,6 +14,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Point
@@ -21,6 +22,7 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.Shader
 import android.hardware.display.DisplayManager
 import android.os.Handler
 import android.os.Looper
@@ -167,8 +169,9 @@ class LockClockLayer(
 
     /**
      * The plugin renders in white, a mask the face's colour is painted through: the colour the
-     * keyguard would give the real clock, brightened against the keyguard's scrim and under white
-     * for as long as the always-on display's white outline is turning into it.
+     * keyguard would give the real clock, or the wallpaper clock's own dark-mode colour, brightened
+     * against the keyguard's scrim and under white for as long as the always-on display's white
+     * outline is turning into it.
      */
     private val layerPaint = Paint()
     private val fillPaint = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN) }
@@ -178,7 +181,13 @@ class LockClockLayer(
             xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
         }
     private val density = context.resources.displayMetrics.density
-    private var colour = themeColour()
+    private var hours = look(minutes = false)
+    private var minutes = look(minutes = true)
+    private var split = repository.getLockClockSplit()
+    private var splitSmall = repository.getLockClockSplitSmall()
+
+    /** The always-on display shows the plugin's outline, which the wallpaper clock can keep on the lock screen. */
+    private var outline = repository.getLockClockOutline()
 
     /** The side-by-side comparison wants the clock in a colour no clock theme produces. */
     private var compare = repository.getLockClockCompare()
@@ -220,14 +229,27 @@ class LockClockLayer(
             }
             SettingsRepository.KEY_LOCK_SCREEN_CLOCK_SEED_COLOR,
             SettingsRepository.KEY_LOCK_SCREEN_CLOCK_SELECTED_COLOR_ID,
+            SettingsRepository.KEY_LOCK_CLOCK_DARK_VARIANT,
+            SettingsRepository.KEY_LOCK_CLOCK_SPLIT,
+            SettingsRepository.KEY_LOCK_CLOCK_SPLIT_SMALL,
             -> {
                 restyle()
+                invalidate()
+            }
+            SettingsRepository.KEY_LOCK_CLOCK_OUTLINE -> {
+                outline = repository.getLockClockOutline()
+                hosted?.doze(if (outline) 1f else 0f)
                 invalidate()
             }
             SettingsRepository.KEY_LOCK_SCREEN_CLOCK_WEIGHT,
             SettingsRepository.KEY_LOCK_SCREEN_CLOCK_WIDTH,
             SettingsRepository.KEY_LOCK_SCREEN_CLOCK_ROUNDNESS,
             -> drop()
+            else ->
+                if (SettingsRepository.isLockClockLookKey(key)) {
+                    restyle()
+                    invalidate()
+                }
         }
     }
 
@@ -305,9 +327,9 @@ class LockClockLayer(
         invalidate()
     }
 
-    /** The doze amount the keyguard hands the real clock. */
+    /** The doze amount the keyguard hands the real clock; an outline-only clock stays at the always-on end. */
     private fun doze(amount: Float) {
-        hosted?.doze(amount)
+        if (!outline) hosted?.doze(amount)
     }
 
     private fun stopDozeAnimation() {
@@ -389,7 +411,8 @@ class LockClockLayer(
             } else {
                 null
             }
-        if (hosted == null) return
+        val hosted = hosted ?: return
+        if (outline) hosted.doze(1f)
         place()
     }
 
@@ -398,15 +421,47 @@ class LockClockLayer(
         hostedFor = null
     }
 
+    /** One part's paint: the two colours the theme in force gives it and whether it runs from one into the other. */
+    private class Look(
+        val gradient: Boolean,
+        val direction: String,
+        val first: Int,
+        val second: Int,
+    )
+
     private fun restyle() {
-        colour = themeColour()
+        hours = look(minutes = false)
+        minutes = look(minutes = true)
+        split = repository.getLockClockSplit()
+        splitSmall = repository.getLockClockSplitSmall()
     }
 
-    /** What the keyguard gives the real clock. */
-    private fun themeColour(): Int {
+    /** What the keyguard gives the real clock, or the wallpaper clock's own picks for the minutes and for dark mode. */
+    private fun look(minutes: Boolean): Look {
         val dark = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        return chosen(repository.getLockScreenClockSelectedColorId(), repository.getLockScreenClockSeedColor(), dark)
+        val own = dark && repository.getLockClockDarkVariant()
+        val first =
+            when {
+                minutes && own -> slotColour(SettingsRepository.LOCK_CLOCK_SLOT_MINUTES_DARK, dark)
+                minutes -> slotColour(SettingsRepository.LOCK_CLOCK_SLOT_MINUTES, dark)
+                own -> slotColour(SettingsRepository.LOCK_CLOCK_SLOT_DARK, dark)
+                else -> chosen(repository.getLockScreenClockSelectedColorId(), repository.getLockScreenClockSeedColor(), dark)
+            }
+        val second =
+            when {
+                minutes && own -> slotColour(SettingsRepository.LOCK_CLOCK_SLOT_MINUTES_SECOND_DARK, dark)
+                minutes -> slotColour(SettingsRepository.LOCK_CLOCK_SLOT_MINUTES_SECOND, dark)
+                own -> slotColour(SettingsRepository.LOCK_CLOCK_SLOT_SECOND_DARK, dark)
+                else -> slotColour(SettingsRepository.LOCK_CLOCK_SLOT_SECOND, dark)
+            }
+        val part = SettingsRepository.lockClockPart(minutes, own)
+        return Look(repository.getLockClockGradient(part), repository.getLockClockGradientDirection(part), first, second)
     }
+
+    private fun slotColour(
+        slot: String,
+        dark: Boolean,
+    ): Int = chosen(repository.getLockClockColorId(slot), repository.getLockClockSeedColor(slot), dark)
 
     /** A chosen seed, or the theme's accent for the default. */
     private fun chosen(
@@ -419,13 +474,30 @@ class LockClockLayer(
         whitePaint.alpha = (whiteness * 255).toInt()
     }
 
-    /** Paints the colour over [area] of the layer, through the mask drawn there. */
+    /** Paints [look] over [area] of the layer, through the mask drawn there. */
     private fun fill(
         canvas: Canvas,
         area: RectF,
+        look: Look,
     ) {
-        fillPaint.color = if (compare) Color.BLUE else compensated(colour)
+        fillPaint.color = if (compare) Color.BLUE else compensated(look.first)
+        fillPaint.shader =
+            when {
+                compare -> null
+                look.gradient -> colours(area, look)
+                else -> null
+            }
         canvas.drawRect(area, fillPaint)
+    }
+
+    /** The part's colour across [area]: its first, running into its second when it is a gradient. */
+    private fun colours(
+        area: RectF,
+        look: Look,
+    ): LinearGradient {
+        val endX = if (look.direction == SettingsRepository.LOCK_CLOCK_GRADIENT_DOWN) area.left else area.right
+        val endY = if (look.direction == SettingsRepository.LOCK_CLOCK_GRADIENT_RIGHT) area.top else area.bottom
+        return LinearGradient(area.left, area.top, endX, endY, compensated(look.first), compensated(if (look.gradient) look.second else look.first), Shader.TileMode.CLAMP)
     }
 
     private fun compensated(colour: Int): Int =
@@ -513,13 +585,26 @@ class LockClockLayer(
         if (alpha <= 0f || rect.isEmpty) return
         val painted = hosted.painted(small, FACE_SCALE)
         val bounds = RectF(painted).apply { offset(rect.left.toFloat(), rect.top + offsetY) }
+        val divide = if (split && (!small || splitSmall)) hosted.split(small) else null
+        val parts =
+            when {
+                divide == null -> listOf(bounds to hours)
+                small -> {
+                    val x = bounds.left + divide * FACE_SCALE
+                    listOf(RectF(bounds.left, bounds.top, x, bounds.bottom) to hours, RectF(x, bounds.top, bounds.right, bounds.bottom) to minutes)
+                }
+                else -> {
+                    val y = bounds.top + divide * FACE_SCALE
+                    listOf(RectF(bounds.left, bounds.top, bounds.right, y) to hours, RectF(bounds.left, y, bounds.right, bounds.bottom) to minutes)
+                }
+            }
         layerPaint.alpha = (alpha * 255).toInt()
         canvas.saveLayer(bounds, layerPaint)
         canvas.save()
         canvas.translate(rect.left.toFloat(), rect.top + offsetY)
         hosted.draw(canvas, small, FACE_SCALE)
         canvas.restore()
-        fill(canvas, bounds)
+        for ((area, look) in parts) fill(canvas, area, look)
         if (whitePaint.alpha > 0) canvas.drawRect(bounds, whitePaint)
         canvas.restore()
     }

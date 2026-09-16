@@ -38,6 +38,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
@@ -315,6 +316,14 @@ class MainViewModel : ViewModel() {
     val lockClockCompare = mutableStateOf(false)
     val lockClockMeasured = mutableStateOf(false)
     val lockClockMeasuredHere = mutableStateOf(false)
+    val lockClockOutline = mutableStateOf(false)
+    val lockClockDarkVariant = mutableStateOf(false)
+    val lockClockSplit = mutableStateOf(false)
+    val lockClockSplitSmall = mutableStateOf(true)
+    val lockClockColorIds = mutableStateMapOf<String, String>()
+    val lockClockColorTones = mutableStateMapOf<String, Int>()
+    val lockClockGradients = mutableStateMapOf<String, Boolean>()
+    val lockClockGradientDirections = mutableStateMapOf<String, String>()
 
     // Live Wallpaper
     val liveWallpaperSelectedVideo = mutableStateOf(SettingsRepository.LIVE_WALLPAPER_DEFAULT_VIDEO)
@@ -1606,6 +1615,18 @@ class MainViewModel : ViewModel() {
         wallpaperHomeBlur.floatValue = settingsRepository.getWallpaperHomeBlur()
         lockClockInWallpaper.value = settingsRepository.getLockClockInWallpaper()
         lockClockCompare.value = settingsRepository.getLockClockCompare()
+        lockClockOutline.value = settingsRepository.getLockClockOutline()
+        lockClockDarkVariant.value = settingsRepository.getLockClockDarkVariant()
+        lockClockSplit.value = settingsRepository.getLockClockSplit()
+        lockClockSplitSmall.value = settingsRepository.getLockClockSplitSmall()
+        for (slot in SettingsRepository.LOCK_CLOCK_COLOR_SLOTS) {
+            lockClockColorIds[slot] = settingsRepository.getLockClockColorId(slot)
+            lockClockColorTones[slot] = settingsRepository.getLockClockColorTone(slot)
+        }
+        for (part in SettingsRepository.LOCK_CLOCK_PARTS) {
+            lockClockGradients[part] = settingsRepository.getLockClockGradient(part)
+            lockClockGradientDirections[part] = settingsRepository.getLockClockGradientDirection(part)
+        }
         loadShutUpConfigs()
         recentSearches.value = settingsRepository.getRecentSearches()
         loadCachedWallpaper()
@@ -4226,6 +4247,61 @@ class MainViewModel : ViewModel() {
         lockClockCompare.value = enabled
         settingsRepository.setLockClockCompare(enabled)
         setLockScreenClockId(lockScreenClockId.value ?: "DEFAULT", context)
+    }
+
+    fun setLockClockOutline(enabled: Boolean) {
+        lockClockOutline.value = enabled
+        settingsRepository.setLockClockOutline(enabled)
+    }
+
+    fun setLockClockDarkVariant(enabled: Boolean) {
+        lockClockDarkVariant.value = enabled
+        settingsRepository.setLockClockDarkVariant(enabled)
+    }
+
+    fun setLockClockSplit(enabled: Boolean) {
+        lockClockSplit.value = enabled
+        settingsRepository.setLockClockSplit(enabled)
+    }
+
+    fun setLockClockSplitSmall(enabled: Boolean) {
+        lockClockSplitSmall.value = enabled
+        settingsRepository.setLockClockSplitSmall(enabled)
+    }
+
+    /** One of the wallpaper clock's own colours, from the same swatches and tone as the system clock's. */
+    fun setLockClockColor(
+        slot: String,
+        id: String,
+    ) {
+        lockClockColorIds[slot] = id
+        settingsRepository.setLockClockColorId(slot, id)
+        settingsRepository.setLockClockSeedColor(slot, calculateEffectiveSeedColor(id, lockClockColorTones[slot] ?: 75))
+    }
+
+    fun setLockClockColorTone(
+        slot: String,
+        tone: Int,
+    ) {
+        lockClockColorTones[slot] = tone
+        settingsRepository.setLockClockColorTone(slot, tone)
+        settingsRepository.setLockClockSeedColor(slot, calculateEffectiveSeedColor(lockClockColorIds[slot] ?: "DEFAULT", tone))
+    }
+
+    fun setLockClockGradientDirection(
+        part: String,
+        direction: String,
+    ) {
+        lockClockGradientDirections[part] = direction
+        settingsRepository.setLockClockGradientDirection(part, direction)
+    }
+
+    fun setLockClockGradient(
+        part: String,
+        gradient: Boolean,
+    ) {
+        lockClockGradients[part] = gradient
+        settingsRepository.setLockClockGradient(part, gradient)
     }
 
     /**

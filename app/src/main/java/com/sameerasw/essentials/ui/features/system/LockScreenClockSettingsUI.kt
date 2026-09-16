@@ -17,6 +17,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -55,6 +56,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.sameerasw.essentials.R
+import com.sameerasw.essentials.data.repository.SettingsRepository
 import com.sameerasw.essentials.ui.activities.WallpaperActivity
 import com.sameerasw.essentials.ui.components.sliders.ConfigSliderItem
 import com.sameerasw.essentials.ui.core.cards.IconToggleItem
@@ -317,51 +319,83 @@ fun LockScreenClockSettingsUI(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        RoundedCardContainer {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceBright,
-                            shape = RoundedCornerShape(MaterialTheme.shapes.extraSmall.bottomEnd),
-                        ).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                // Multi-row Color Picker
-                val rows = colorOptions.chunked(5)
-                rows.forEach { rowOptions ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                    ) {
-                        rowOptions.forEach { colorOption ->
-                            ColorCircle(
-                                colorOption = colorOption,
-                                isSelected = viewModel.lockScreenClockSelectedColorId.value == colorOption.id,
-                                onClick = {
-                                    HapticUtil.performUIHaptic(view)
-                                    viewModel.setLockScreenClockColor(
-                                        colorOption.id,
-                                        colorOption.seedColor,
-                                        context,
-                                    )
-                                },
-                            )
-                        }
-                    }
+        val split = clockInWallpaper && viewModel.lockClockSplit.value
+        val darkVariant = clockInWallpaper && viewModel.lockClockDarkVariant.value
+        var editMinutes by remember { mutableStateOf(false) }
+        var editDark by remember { mutableStateOf(false) }
+        val minutes = split && editMinutes
+        val dark = darkVariant && editDark
+
+        if (split || darkVariant) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (split) {
+                    val parts = listOf(false to stringResource(R.string.lock_clock_hours), true to stringResource(R.string.lock_clock_minutes))
+                    SegmentedPicker(items = parts, selectedItem = parts.first { it.first == minutes }, onItemSelected = { editMinutes = it.first }, labelProvider = { it.second }, containerColor = Color.Transparent, contentPadding = PaddingValues(0.dp), modifier = Modifier.weight(1f))
+                }
+                if (darkVariant) {
+                    val modes = listOf(false to stringResource(R.string.lock_clock_mode_light), true to stringResource(R.string.lock_clock_mode_dark))
+                    SegmentedPicker(items = modes, selectedItem = modes.first { it.first == dark }, onItemSelected = { editDark = it.first }, labelProvider = { it.second }, containerColor = Color.Transparent, contentPadding = PaddingValues(0.dp), modifier = Modifier.weight(1f))
                 }
             }
+        }
 
-            ConfigSliderItem(
-                title = stringResource(R.string.label_color_tone),
-                value = viewModel.lockScreenClockColorTone.intValue.toFloat(),
-                onValueChange = { viewModel.setLockScreenClockColorTone(it.toInt(), context) },
-                valueRange = 0f..100f,
-                valueFormatter = { "${it.toInt()}%" },
-                iconRes = R.drawable.rounded_palette_24,
-                enabled = viewModel.lockScreenClockSelectedColorId.value != "DEFAULT",
-            )
+        RoundedCardContainer {
+            if (minutes || dark) {
+                ColorSlot(viewModel, colorOptions, colourSlot(minutes, dark, second = false), null, R.string.label_color_tone)
+            } else {
+                ColorSwatches(colorOptions, viewModel.lockScreenClockSelectedColorId.value) {
+                    viewModel.setLockScreenClockColor(it.id, it.seedColor, context)
+                }
+                ConfigSliderItem(
+                    title = stringResource(R.string.label_color_tone),
+                    value = viewModel.lockScreenClockColorTone.intValue.toFloat(),
+                    onValueChange = { viewModel.setLockScreenClockColorTone(it.toInt(), context) },
+                    valueRange = 0f..100f,
+                    valueFormatter = { "${it.toInt()}%" },
+                    iconRes = R.drawable.rounded_palette_24,
+                    enabled = viewModel.lockScreenClockSelectedColorId.value != "DEFAULT",
+                )
+            }
+
+            if (clockInWallpaper) PartControls(viewModel, colorOptions, minutes, dark, highlightSetting)
+        }
+
+        if (clockInWallpaper) {
+            RoundedCardContainer {
+                IconToggleItem(
+                    iconRes = R.drawable.rounded_timer_24,
+                    modifier = Modifier.highlight(highlightSetting == "lock_clock_split"),
+                    title = stringResource(R.string.lock_clock_split_title),
+                    description = stringResource(R.string.lock_clock_split_desc),
+                    isChecked = viewModel.lockClockSplit.value,
+                    onCheckedChange = { viewModel.setLockClockSplit(it) },
+                )
+                if (split) {
+                    IconToggleItem(
+                        iconRes = R.drawable.rounded_line_weight_24,
+                        title = stringResource(R.string.lock_clock_split_small_title),
+                        description = stringResource(R.string.lock_clock_split_small_desc),
+                        isChecked = viewModel.lockClockSplitSmall.value,
+                        onCheckedChange = { viewModel.setLockClockSplitSmall(it) },
+                    )
+                }
+                IconToggleItem(
+                    iconRes = R.drawable.rounded_dark_mode_24,
+                    modifier = Modifier.highlight(highlightSetting == "lock_clock_dark_variant"),
+                    title = stringResource(R.string.lock_clock_dark_variant_title),
+                    description = stringResource(R.string.lock_clock_dark_variant_desc),
+                    isChecked = darkVariant,
+                    onCheckedChange = { viewModel.setLockClockDarkVariant(it) },
+                )
+                IconToggleItem(
+                    iconRes = R.drawable.rounded_line_weight_24,
+                    title = stringResource(R.string.lock_clock_outline_title),
+                    modifier = Modifier.highlight(highlightSetting == "lock_clock_outline"),
+                    description = stringResource(R.string.lock_clock_outline_desc),
+                    isChecked = viewModel.lockClockOutline.value,
+                    onCheckedChange = { viewModel.setLockClockOutline(it) },
+                )
+            }
         }
 
         if (isDefaultStyleSelected) {
@@ -557,6 +591,129 @@ fun LockScreenClockSettingsUI(
         )
 
         Spacer(modifier = Modifier.height(32.dp))
+    }
+}
+
+/**
+ * One part of the wallpaper clock in one mode: whether its colour runs into a second, that colour,
+ * and the run's direction.
+ */
+@Composable
+private fun PartControls(
+    viewModel: MainViewModel,
+    colorOptions: List<ClockColorOption>,
+    minutes: Boolean,
+    dark: Boolean,
+    highlightSetting: String?,
+) {
+    val part = SettingsRepository.lockClockPart(minutes, dark)
+    val gradient = viewModel.lockClockGradients[part] ?: false
+    val direction = viewModel.lockClockGradientDirections[part] ?: SettingsRepository.LOCK_CLOCK_GRADIENT_DOWN
+    IconToggleItem(
+        iconRes = R.drawable.rounded_invert_colors_24,
+        modifier = Modifier.highlight(highlightSetting == "lock_clock_gradient"),
+        title = stringResource(R.string.lock_clock_gradient_title),
+        description = stringResource(R.string.lock_clock_gradient_desc),
+        isChecked = gradient,
+        onCheckedChange = { viewModel.setLockClockGradient(part, it) },
+    )
+    if (!gradient) return
+    ColorSlot(viewModel, colorOptions, colourSlot(minutes, dark, second = true), R.string.lock_clock_second_color, R.string.lock_clock_second_tone)
+    val directions =
+        listOf(
+            SettingsRepository.LOCK_CLOCK_GRADIENT_DOWN to stringResource(R.string.lock_clock_gradient_vertical),
+            SettingsRepository.LOCK_CLOCK_GRADIENT_RIGHT to stringResource(R.string.lock_clock_gradient_horizontal),
+            SettingsRepository.LOCK_CLOCK_GRADIENT_DIAGONAL to stringResource(R.string.lock_clock_gradient_diagonal),
+        )
+    SegmentedPicker(
+        items = directions,
+        selectedItem = directions.first { it.first == direction },
+        onItemSelected = { viewModel.setLockClockGradientDirection(part, it.first) },
+        labelProvider = { it.second },
+        title = stringResource(R.string.lock_clock_gradient_direction),
+    )
+}
+
+/** The slot of one of the wallpaper clock's own colours; the hours' light colour is the system seed and has none. */
+private fun colourSlot(
+    minutes: Boolean,
+    dark: Boolean,
+    second: Boolean,
+): String =
+    when {
+        minutes && second && dark -> SettingsRepository.LOCK_CLOCK_SLOT_MINUTES_SECOND_DARK
+        minutes && second -> SettingsRepository.LOCK_CLOCK_SLOT_MINUTES_SECOND
+        minutes && dark -> SettingsRepository.LOCK_CLOCK_SLOT_MINUTES_DARK
+        minutes -> SettingsRepository.LOCK_CLOCK_SLOT_MINUTES
+        second && dark -> SettingsRepository.LOCK_CLOCK_SLOT_SECOND_DARK
+        second -> SettingsRepository.LOCK_CLOCK_SLOT_SECOND
+        else -> SettingsRepository.LOCK_CLOCK_SLOT_DARK
+    }
+
+/** One of the wallpaper clock's own colours: the swatches, captioned or not, and their tone. */
+@Composable
+private fun ColorSlot(
+    viewModel: MainViewModel,
+    colorOptions: List<ClockColorOption>,
+    slot: String,
+    title: Int?,
+    toneTitle: Int,
+) {
+    val id = viewModel.lockClockColorIds[slot] ?: "DEFAULT"
+    ColorSwatches(colorOptions, id, title?.let { stringResource(it) }) { viewModel.setLockClockColor(slot, it.id) }
+    ConfigSliderItem(
+        title = stringResource(toneTitle),
+        value = (viewModel.lockClockColorTones[slot] ?: 75).toFloat(),
+        onValueChange = { viewModel.setLockClockColorTone(slot, it.toInt()) },
+        valueRange = 0f..100f,
+        valueFormatter = { "${it.toInt()}%" },
+        iconRes = R.drawable.rounded_palette_24,
+        enabled = id != "DEFAULT",
+    )
+}
+
+@Composable
+private fun ColorSwatches(
+    options: List<ClockColorOption>,
+    selectedId: String,
+    title: String? = null,
+    onSelect: (ClockColorOption) -> Unit,
+) {
+    val view = LocalView.current
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceBright,
+                    shape = RoundedCornerShape(MaterialTheme.shapes.extraSmall.bottomEnd),
+                ).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        title?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        options.chunked(5).forEach { rowOptions ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                rowOptions.forEach { colorOption ->
+                    ColorCircle(
+                        colorOption = colorOption,
+                        isSelected = selectedId == colorOption.id,
+                        onClick = {
+                            HapticUtil.performUIHaptic(view)
+                            onSelect(colorOption)
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 

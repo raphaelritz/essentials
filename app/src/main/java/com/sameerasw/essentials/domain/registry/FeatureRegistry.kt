@@ -425,6 +425,26 @@ object FeatureRegistry {
                             R.string.lock_clock_measure_desc,
                             "lock_clock_measure",
                         ),
+                        SearchSetting(
+                            R.string.lock_clock_split_title,
+                            R.string.lock_clock_split_desc,
+                            "lock_clock_split",
+                        ),
+                        SearchSetting(
+                            R.string.lock_clock_dark_variant_title,
+                            R.string.lock_clock_dark_variant_desc,
+                            "lock_clock_dark_variant",
+                        ),
+                        SearchSetting(
+                            R.string.lock_clock_outline_title,
+                            R.string.lock_clock_outline_desc,
+                            "lock_clock_outline",
+                        ),
+                        SearchSetting(
+                            R.string.lock_clock_gradient_title,
+                            R.string.lock_clock_gradient_desc,
+                            "lock_clock_gradient",
+                        ),
                     ),
                 showToggle = false,
                 parentFeatureId = "Display",
