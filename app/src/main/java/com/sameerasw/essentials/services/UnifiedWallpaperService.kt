@@ -316,6 +316,7 @@ class UnifiedWallpaperService : WallpaperService() {
                 canvas.drawBitmap(home, null, destinationFor(home), crossfadePaint)
             }
             if (clockWanted) {
+                clock.setBackdrop(lock, lock?.let(::destinationFor))
                 clock.draw(canvas, unlockProgress)
             }
         }

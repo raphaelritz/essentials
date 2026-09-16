@@ -445,6 +445,11 @@ object FeatureRegistry {
                             R.string.lock_clock_gradient_desc,
                             "lock_clock_gradient",
                         ),
+                        SearchSetting(
+                            R.string.search_lock_clock_material_title,
+                            R.string.search_lock_clock_material_desc,
+                            "lock_clock_material",
+                        ),
                     ),
                 showToggle = false,
                 parentFeatureId = "Display",

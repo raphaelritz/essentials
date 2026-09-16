@@ -10,6 +10,7 @@
 package com.sameerasw.essentials.ui.features.system
 
 import android.content.Intent
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -595,8 +596,8 @@ fun LockScreenClockSettingsUI(
 }
 
 /**
- * One part of the wallpaper clock in one mode: whether its colour runs into a second, that colour,
- * and the run's direction.
+ * One part of the wallpaper clock in one mode: its material and frost, whether its colour runs into
+ * a second, that colour, and the run's direction.
  */
 @Composable
 private fun PartControls(
@@ -607,8 +608,35 @@ private fun PartControls(
     highlightSetting: String?,
 ) {
     val part = SettingsRepository.lockClockPart(minutes, dark)
+    val material = viewModel.lockClockMaterials[part] ?: SettingsRepository.LOCK_CLOCK_MATERIAL_SOLID
     val gradient = viewModel.lockClockGradients[part] ?: false
     val direction = viewModel.lockClockGradientDirections[part] ?: SettingsRepository.LOCK_CLOCK_GRADIENT_DOWN
+    val materials =
+        listOfNotNull(
+            SettingsRepository.LOCK_CLOCK_MATERIAL_SOLID to stringResource(R.string.lock_clock_material_solid),
+            (SettingsRepository.LOCK_CLOCK_MATERIAL_GLASS to stringResource(R.string.lock_clock_material_glass)).takeIf { Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU },
+        )
+    if (materials.size > 1) {
+        SegmentedPicker(
+            items = materials,
+            selectedItem = materials.firstOrNull { it.first == material } ?: materials.first(),
+            onItemSelected = { viewModel.setLockClockMaterial(part, it.first) },
+            labelProvider = { it.second },
+            modifier = Modifier.highlight(highlightSetting == "lock_clock_material"),
+            title = stringResource(R.string.lock_clock_material),
+            description = stringResource(R.string.lock_clock_material_glass_desc).takeIf { material == SettingsRepository.LOCK_CLOCK_MATERIAL_GLASS },
+        )
+    }
+    if (material == SettingsRepository.LOCK_CLOCK_MATERIAL_GLASS) {
+        ConfigSliderItem(
+            title = stringResource(R.string.lock_clock_glass_frost),
+            value = viewModel.lockClockGlassFrosts[part] ?: 0.25f,
+            onValueChange = { viewModel.setLockClockGlassFrost(part, it) },
+            valueFormatter = { "${(it * 100).toInt()}%" },
+            iconRes = R.drawable.rounded_blur_on_24,
+            description = stringResource(R.string.lock_clock_glass_frost_desc),
+        )
+    }
     IconToggleItem(
         iconRes = R.drawable.rounded_invert_colors_24,
         modifier = Modifier.highlight(highlightSetting == "lock_clock_gradient"),
