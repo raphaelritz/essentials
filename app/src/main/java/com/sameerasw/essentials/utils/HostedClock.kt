@@ -20,6 +20,7 @@ import android.graphics.Color
 import android.graphics.Point
 import android.graphics.Rect
 import android.graphics.RectF
+import android.icu.util.Calendar
 import android.icu.util.TimeZone
 import android.provider.Settings
 import android.text.format.DateFormat
@@ -37,9 +38,10 @@ import java.util.concurrent.Executor
 /**
  * The Pixel clocks are plugin APKs that only SystemUI may load, but nothing stops another process
  * from loading them the same way: a class loader over SystemUI's APK as host, the plugin APK as
- * child. The clock then renders into any canvas, which is how the wallpaper gets the real glyphs
- * instead of a look-alike. Both faces are kept, since the keyguard swaps the large clock for the
- * small one whenever a notification is showing.
+ * child; the default clock is SystemUI's own provider and comes from the host alone. The clock
+ * then renders into any canvas, which is how the wallpaper gets the real glyphs instead of a
+ * look-alike. Both faces are kept, since the keyguard swaps the large clock for the small one
+ * whenever a notification is showing.
  */
 class HostedClock private constructor(
     private val large: Face,
@@ -50,6 +52,8 @@ class HostedClock private constructor(
         val events: Any,
         val animations: Any?,
         val textSize: Float,
+        /** SystemUI's own faces sit in a frame of the keyguard's that wraps them, so their width is their content's; a plugin's face is laid out at the region. */
+        val wrapped: Boolean,
     ) {
         val region = Rect()
         val measured = Point()
@@ -69,6 +73,9 @@ class HostedClock private constructor(
         private const val SMALL_CLOCK_TEXT_SIZE = "small_clock_text_size"
         private const val API_PACKAGE = "com.android.systemui.plugins.keyguard.ui.clocks"
         private const val LOGCAT_BUFFER = "com.android.systemui.log.core.LogcatOnlyMessageBuffer"
+        private const val DEFAULT_PROVIDER = "com.android.systemui.shared.clocks.DefaultClockProvider"
+        private const val TIME_KEEPER = "com.android.systemui.customization.clocks.TimeKeeperImpl"
+        private const val FUNCTION = "kotlin.jvm.functions.Function0"
 
         /**
          * The only packages a plugin is meant to share with its host. SystemUI filters its own
@@ -108,9 +115,9 @@ class HostedClock private constructor(
             }.getOrNull()
 
         /**
-         * Loads the plugin that provides [clockId] and creates both of its faces. Null when no
-         * plugin provides it, the default clock being compiled into SystemUI, or when SystemUI
-         * lacks the text sizes the keyguard lays the faces out with.
+         * Loads the provider of [clockId], SystemUI's own or a plugin's, and creates both of its
+         * faces. Null when nothing provides it or when SystemUI lacks the text sizes the keyguard
+         * lays the faces out with.
          */
         fun load(
             context: Context,
@@ -120,6 +127,9 @@ class HostedClock private constructor(
         ): HostedClock? {
             val pm = context.packageManager
             val host = PathClassLoader(systemUiPaths(context).joinToString(File.pathSeparator), ClassLoader.getSystemClassLoader())
+            val systemUi = context.createPackageContext(SYSTEM_UI, 0)
+            val builtIn = builtInProvider(host, systemUi)
+            if (provides(builtIn, clockId)) return create(systemUi, builtIn, host, clockId, seedColor, axes, wrapped = true)
             val services =
                 pm
                     .queryIntentServices(Intent(PLUGIN_ACTION), PackageManager.MATCH_ALL)
@@ -129,14 +139,49 @@ class HostedClock private constructor(
                 val loader = PluginClassLoader(pm.getApplicationInfo(info.packageName, 0).sourceDir, host)
                 val provider = loader.loadClass(info.name).getDeclaredConstructor().newInstance()
                 invoke(provider, "onCreate", context, PluginContext(context.createPackageContext(info.packageName, 0), loader))
-                val provides = (invoke(provider, "getClocks") as List<*>).any { invoke(it!!, "getClockId") == clockId }
-                if (!provides) {
+                if (!provides(provider, clockId)) {
                     runCatching { invoke(provider, "onDestroy") }
                     continue
                 }
-                return create(context, provider, host, clockId, seedColor, axes)
+                return create(context, provider, host, clockId, seedColor, axes, wrapped = false)
             }
             return null
+        }
+
+        private fun provides(
+            provider: Any,
+            clockId: String,
+        ): Boolean = (invoke(provider, "getClocks") as List<*>).any { invoke(it!!, "getClockId") == clockId }
+
+        /**
+         * SystemUI's own provider is injected rather than constructed: it wants SystemUI's resources
+         * and a factory for its time keeper, and its faces read SystemUI's dimensions through the
+         * context they are created with, hence [systemUi] here and for the clock's creation.
+         */
+        private fun builtInProvider(
+            host: ClassLoader,
+            systemUi: Context,
+        ): Any {
+            val provider = allocate(host.loadClass(DEFAULT_PROVIDER))
+            provider.javaClass.getField("resources").set(provider, systemUi.resources)
+            provider.javaClass.getField("timeKeeperFactory").set(provider, Proxy.newProxyInstance(host, arrayOf(host.loadClass(FUNCTION))) { _, _, _ -> timeKeeper(host) })
+            return provider
+        }
+
+        private fun timeKeeper(host: ClassLoader): Any =
+            allocate(host.loadClass(TIME_KEEPER)).also {
+                it.javaClass.getField("calendar").set(it, Calendar.getInstance())
+                it.javaClass.getField("callbacks").set(it, ArrayList<Any>())
+            }
+
+        /**
+         * R8 removed the empty constructors of SystemUI's injected classes and moved their field
+         * initialisers into the callers, so such a class is only ever allocated, never constructed;
+         * its fields are filled afterwards, as SystemUI's own code does.
+         */
+        private fun allocate(cls: Class<*>): Any {
+            val unsafe = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe").apply { isAccessible = true }.get(null)
+            return unsafe.javaClass.getMethod("allocateInstance", Class::class.java).invoke(unsafe, cls)!!
         }
 
         private fun create(
@@ -146,6 +191,7 @@ class HostedClock private constructor(
             clockId: String,
             seedColor: Int?,
             axes: Map<String, Float>,
+            wrapped: Boolean,
         ): HostedClock? {
             val largeTextSize = systemUiDimension(context, LARGE_CLOCK_TEXT_SIZE) ?: return null
             val smallTextSize = systemUiDimension(context, SMALL_CLOCK_TEXT_SIZE) ?: return null
@@ -177,8 +223,8 @@ class HostedClock private constructor(
                 timeFormat?.let { runCatching { invoke(events, "onTimeFormatChanged", it) } }
             }
             return HostedClock(
-                face(invoke(clock, "getLargeClock")!!, largeTextSize, timeFormat),
-                face(invoke(clock, "getSmallClock")!!, smallTextSize, timeFormat),
+                face(invoke(clock, "getLargeClock")!!, largeTextSize, timeFormat, wrapped),
+                face(invoke(clock, "getSmallClock")!!, smallTextSize, timeFormat, wrapped),
             )
         }
 
@@ -191,6 +237,7 @@ class HostedClock private constructor(
             controller: Any,
             textSize: Float,
             timeFormat: Any?,
+            wrapped: Boolean,
         ): Face {
             val view =
                 runCatching { invoke(controller, "getView") as View }
@@ -198,7 +245,7 @@ class HostedClock private constructor(
             val events = invoke(controller, "getEvents")!!
             invoke(events, "onFontSettingChanged", textSize)
             timeFormat?.let { runCatching { invoke(events, "onTimeFormatChanged", it) } }
-            return Face(view, events, runCatching { invoke(controller, "getAnimations") }.getOrNull(), textSize)
+            return Face(view, events, runCatching { invoke(controller, "getAnimations") }.getOrNull(), textSize, wrapped)
         }
 
         /**
@@ -394,9 +441,10 @@ class HostedClock private constructor(
     fun textSize(small: Boolean): Float = face(small).textSize
 
     /**
-     * Sizes one face the way the keyguard's host does: measured against a frame the size of the
-     * region by its own layout params. The large face wraps its digits at SystemUI's font size;
-     * the small face fills the frame and aligns its text inside it.
+     * Sizes one face the way the keyguard's host does. A plugin's face is measured against a frame
+     * the size of the region, by its own layout params. SystemUI's own faces sit in a frame that
+     * wraps them, as wide as the screen: the small face's line would otherwise break to fit a
+     * region read with narrower digits.
      */
     fun fit(
         small: Boolean,
@@ -410,8 +458,9 @@ class HostedClock private constructor(
 
     private fun measure(face: Face) {
         val params = face.view.layoutParams
+        val width = if (face.wrapped) atMost(face.view.resources.displayMetrics.widthPixels) else exactly(face.region.width())
         face.view.measure(
-            ViewGroup.getChildMeasureSpec(exactly(face.region.width()), 0, params?.width ?: ViewGroup.LayoutParams.WRAP_CONTENT),
+            ViewGroup.getChildMeasureSpec(width, 0, params?.width ?: ViewGroup.LayoutParams.WRAP_CONTENT),
             ViewGroup.getChildMeasureSpec(exactly(face.region.height()), 0, params?.height ?: ViewGroup.LayoutParams.WRAP_CONTENT),
         )
         face.view.layout(0, 0, face.view.measuredWidth, face.view.measuredHeight)
@@ -472,6 +521,8 @@ class HostedClock private constructor(
 
     private fun exactly(size: Int): Int = View.MeasureSpec.makeMeasureSpec(size.coerceAtLeast(0), View.MeasureSpec.EXACTLY)
 
+    private fun atMost(size: Int): Int = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.AT_MOST)
+
     /** The keyguard lays the clock out again on every tick, and so does this. */
     fun tick() {
         for (face in listOf(large, small)) {
@@ -522,13 +573,14 @@ class HostedClock private constructor(
     }
 
     /**
-     * The keyguard keeps the scaled face centred where the measured one was, so a region read with
-     * other digits still puts today's digits where the keyguard has them.
+     * The keyguard keeps the scaled large face centred where the measured one was, and the small
+     * face's text starting where the measured one's did, so a region read with other digits still
+     * puts today's digits where the keyguard has them.
      */
     private fun offsetX(
         face: Face,
         scale: Float,
-    ): Float = (face.region.width() - face.measured.x) * scale / 2f
+    ): Float = if (face === small) 0f else (face.region.width() - face.measured.x) * scale / 2f
 
     private fun offsetY(
         face: Face,

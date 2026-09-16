@@ -31,7 +31,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
-import android.util.Log
 import android.view.Display
 import android.view.animation.LinearInterpolator
 import android.view.animation.PathInterpolator
@@ -52,10 +51,8 @@ class LockClockLayer(
     private val invalidate: () -> Unit,
 ) {
     companion object {
-        private const val TAG = "LockClockLayer"
-
         /** Clocks verified to disappear behind a transparent seed colour and to host faithfully. */
-        private val SUPPORTED_CLOCKS = setOf("DIGITAL_CLOCK_CALLIGRAPHY")
+        private val SUPPORTED_CLOCKS = setOf("DEFAULT", "DIGITAL_CLOCK_FLEX", "DIGITAL_CLOCK_CALLIGRAPHY")
 
         /** Clocks the always-on display shows as an outline; the others thin their strokes instead. */
         private val OUTLINE_CLOCKS = setOf("DIGITAL_CLOCK_CALLIGRAPHY")
@@ -444,7 +441,7 @@ class LockClockLayer(
                 try {
                     HostedClock.load(context, clockId, Color.WHITE, axes())
                 } catch (t: Throwable) {
-                    Log.w(TAG, "Could not host the clock", t)
+                    ClockLog.add(context, "host: $clockId failed, ${generateSequence(t) { it.cause }.last()}")
                     null
                 }
             } else {
