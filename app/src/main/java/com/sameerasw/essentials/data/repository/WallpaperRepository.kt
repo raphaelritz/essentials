@@ -16,7 +16,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.core.content.FileProvider
 import com.google.gson.Gson
+import com.sameerasw.essentials.data.repository.SettingsRepository
 import com.sameerasw.essentials.domain.model.WallpaperInfo
+import com.sameerasw.essentials.utils.WallpaperImages
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -91,6 +93,10 @@ class WallpaperRepository {
         withContext(Dispatchers.IO) {
             try {
                 val bitmap = downloadBitmap(urlString) ?: return@withContext false
+                if (WallpaperImages.coverage(context) == WallpaperImages.Coverage.BOTH) {
+                    val settings = SettingsRepository(context)
+                    return@withContext applyToEssentials(context, bitmap, settings.getDailyWallpaperApplyHome(), settings.getDailyWallpaperApplyLock())
+                }
                 val cacheFile = File(context.cacheDir, "today_wallpaper.jpg")
                 FileOutputStream(cacheFile).use { out ->
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
@@ -123,6 +129,14 @@ class WallpaperRepository {
         withContext(Dispatchers.IO) {
             try {
                 val rawBitmap = downloadBitmap(urlString) ?: return@withContext false
+                if (WallpaperImages.coverage(context) == WallpaperImages.Coverage.BOTH) {
+                    return@withContext applyToEssentials(
+                        context,
+                        rawBitmap,
+                        flags and WallpaperManager.FLAG_SYSTEM != 0,
+                        flags and WallpaperManager.FLAG_LOCK != 0,
+                    )
+                }
                 val bitmap = centerCropToScreen(context, rawBitmap)
                 withContext(Dispatchers.Main) {
                     android.widget.Toast
@@ -144,6 +158,29 @@ class WallpaperRepository {
                 false
             }
         }
+
+    /** While Essentials draws both screens, the daily photo becomes its image instead of replacing it. */
+    private fun applyToEssentials(
+        context: Context,
+        bitmap: Bitmap,
+        home: Boolean,
+        lock: Boolean,
+    ): Boolean {
+        val settings = SettingsRepository(context)
+        val cropped = WallpaperImages.cropToScreen(context, bitmap)
+        if (lock) {
+            WallpaperImages.save(WallpaperImages.lockFile(context), cropped)
+            settings.setWallpaperLockImage(SettingsRepository.WALLPAPER_IMAGE_PHOTO)
+        }
+        if (home && lock) {
+            settings.setWallpaperHomeImage(SettingsRepository.WALLPAPER_IMAGE_LOCK)
+        } else if (home) {
+            WallpaperImages.save(WallpaperImages.homeFile(context), cropped)
+            settings.setWallpaperHomeImage(SettingsRepository.WALLPAPER_IMAGE_PHOTO)
+        }
+        settings.bumpWallpaperRevision()
+        return true
+    }
 
     private fun centerCropToScreen(
         context: Context,

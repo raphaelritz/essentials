@@ -325,6 +325,14 @@ class SettingsRepository(
         const val KEY_AOD_WALLPAPER_VIGNETTE = "aod_wallpaper_vignette"
         const val KEY_AOD_WALLPAPER_BLACK_THRESHOLD = "aod_wallpaper_black_threshold"
         const val KEY_AOD_WALLPAPER_CUSTOM_IMAGE = "aod_wallpaper_custom_image"
+        const val KEY_WALLPAPER_REVISION = "wallpaper_revision"
+        const val KEY_WALLPAPER_LOCK_IMAGE = "wallpaper_lock_image"
+        const val KEY_WALLPAPER_HOME_IMAGE = "wallpaper_home_image"
+        const val KEY_WALLPAPER_LOCK_BLUR = "wallpaper_lock_blur"
+        const val KEY_WALLPAPER_HOME_BLUR = "wallpaper_home_blur"
+        const val WALLPAPER_IMAGE_SYSTEM = "system"
+        const val WALLPAPER_IMAGE_PHOTO = "photo"
+        const val WALLPAPER_IMAGE_LOCK = "lock"
         const val KEY_AOD_WALLPAPER_USE_ALBUM_ART = "aod_wallpaper_use_album_art"
         const val KEY_AOD_WALLPAPER_KEEP_ON_MEDIA = "aod_wallpaper_keep_on_media"
         const val KEY_AOD_WALLPAPER_MEDIA_EXCLUDED_APPS = "aod_wallpaper_media_excluded_apps"
@@ -3086,6 +3094,26 @@ class SettingsRepository(
 
     fun setAodWallpaperCustomImage(hasCustomImage: Boolean) = putBoolean(KEY_AOD_WALLPAPER_CUSTOM_IMAGE, hasCustomImage)
 
+    fun getWallpaperRevision(): Int = getInt(KEY_WALLPAPER_REVISION, 0)
+
+    /** The image files keep their names, so a bump is what tells the engine and the overlay to read them again. */
+    fun bumpWallpaperRevision() = putInt(KEY_WALLPAPER_REVISION, getWallpaperRevision() + 1)
+
+    fun getWallpaperLockImage(): String = getString(KEY_WALLPAPER_LOCK_IMAGE, WALLPAPER_IMAGE_SYSTEM) ?: WALLPAPER_IMAGE_SYSTEM
+
+    fun setWallpaperLockImage(value: String) = putString(KEY_WALLPAPER_LOCK_IMAGE, value)
+
+    fun getWallpaperHomeImage(): String = getString(KEY_WALLPAPER_HOME_IMAGE, WALLPAPER_IMAGE_LOCK) ?: WALLPAPER_IMAGE_LOCK
+
+    fun setWallpaperHomeImage(value: String) = putString(KEY_WALLPAPER_HOME_IMAGE, value)
+
+    fun getWallpaperLockBlur(): Float = getFloat(KEY_WALLPAPER_LOCK_BLUR, 0f)
+
+    fun setWallpaperLockBlur(value: Float) = putFloat(KEY_WALLPAPER_LOCK_BLUR, value)
+
+    fun getWallpaperHomeBlur(): Float = getFloat(KEY_WALLPAPER_HOME_BLUR, 0f)
+
+    fun setWallpaperHomeBlur(value: Float) = putFloat(KEY_WALLPAPER_HOME_BLUR, value)
     fun isAodWallpaperUseAlbumArtEnabled(): Boolean = getBoolean(KEY_AOD_WALLPAPER_USE_ALBUM_ART, false)
 
     fun setAodWallpaperUseAlbumArt(enabled: Boolean) = putBoolean(KEY_AOD_WALLPAPER_USE_ALBUM_ART, enabled)

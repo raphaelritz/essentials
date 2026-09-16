@@ -2598,4 +2598,6 @@
     <string name="action_expand_notifications">Expand notifications</string>
     <string name="action_expand_settings">Expand settings</string>
     <string name="action_collapse_status_bar">Collapse status bar</string>
+    <string name="unified_wallpaper_label">Essentials wallpaper</string>
+    <string name="unified_wallpaper_description">Draws your photos on the home and lock screen with adjustable blur</string>
 </resources>
