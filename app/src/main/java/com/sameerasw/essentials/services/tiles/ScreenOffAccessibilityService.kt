@@ -242,9 +242,14 @@ class ScreenOffAccessibilityService :
                 key == SettingsRepository.KEY_AOD_WALLPAPER_CUSTOM_IMAGE ||
                 key == SettingsRepository.KEY_AOD_WALLPAPER_USE_ALBUM_ART ||
                 key == SettingsRepository.KEY_AOD_WALLPAPER_KEEP_ON_MEDIA ||
-                key == SettingsRepository.KEY_AOD_WALLPAPER_MEDIA_EXCLUDED_APPS
+                key == SettingsRepository.KEY_AOD_WALLPAPER_MEDIA_EXCLUDED_APPS ||
+                key == SettingsRepository.KEY_WALLPAPER_REVISION
             ) {
-                if (key == SettingsRepository.KEY_AOD_WALLPAPER_CUSTOM_IMAGE) {
+                // A new image keeps its file name, so only the revision tells the handler that its
+                // cached bitmap is stale.
+                if (key == SettingsRepository.KEY_AOD_WALLPAPER_CUSTOM_IMAGE ||
+                    key == SettingsRepository.KEY_WALLPAPER_REVISION
+                ) {
                     aodWallpaperOverlayHandler.invalidateWallpaperCache()
                 }
                 aodWallpaperOverlayHandler.updateState()

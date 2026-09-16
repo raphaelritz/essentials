@@ -21,6 +21,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -79,6 +80,7 @@ import com.sameerasw.essentials.utils.ShellUtils
 import com.sameerasw.essentials.utils.ShizukuUtils
 import com.sameerasw.essentials.utils.SurfaceFlingerControl
 import com.sameerasw.essentials.utils.UpdateNotificationHelper
+import com.sameerasw.essentials.utils.WallpaperImages
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -7966,6 +7968,15 @@ class MainViewModel : ViewModel() {
                             }
                             return@launch
                         }
+                    }
+                }
+
+                if (WallpaperImages.drawsLock(context)) {
+                    BitmapFactory.decodeFile(WallpaperImages.lockFile(context).absolutePath)?.let { bitmap ->
+                        withContext(Dispatchers.Main) {
+                            currentWallpaperBitmap.value = bitmap
+                        }
+                        return@launch
                     }
                 }
 

@@ -44,6 +44,7 @@ import com.sameerasw.essentials.data.repository.SettingsRepository
 import com.sameerasw.essentials.domain.model.AppSelection
 import com.sameerasw.essentials.services.NotificationListener
 import com.sameerasw.essentials.utils.AppUtil
+import com.sameerasw.essentials.utils.WallpaperImages
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -286,14 +287,6 @@ class AodWallpaperOverlayHandler(
         val targetY = (-maxShiftPx..maxShiftPx).random().toFloat()
 
         if (animated) {
-            ObjectAnimator.ofFloat(imageView, "scaleX", imageView.scaleX, 1.05f).apply {
-                duration = 1000
-                start()
-            }
-            ObjectAnimator.ofFloat(imageView, "scaleY", imageView.scaleY, 1.05f).apply {
-                duration = 1000
-                start()
-            }
             ObjectAnimator.ofFloat(imageView, "translationX", imageView.translationX, targetX).apply {
                 duration = 1000
                 start()
@@ -303,8 +296,6 @@ class AodWallpaperOverlayHandler(
                 start()
             }
         } else {
-            imageView.scaleX = 1.05f
-            imageView.scaleY = 1.05f
             imageView.translationX = targetX
             imageView.translationY = targetY
         }
@@ -451,7 +442,6 @@ class AodWallpaperOverlayHandler(
                 val container = overlayContainer ?: return
                 container.visibility = View.VISIBLE
                 container.alpha = 0f
-                applyBurnInShift(animated = false)
                 windowManager?.addView(container, params)
                 isOverlayAdded = true
 
@@ -738,11 +728,12 @@ class AodWallpaperOverlayHandler(
     private fun extractCurrentWallpaper(): Bitmap? {
         return try {
             if (prefs.getBoolean(SettingsRepository.KEY_AOD_WALLPAPER_CUSTOM_IMAGE, false)) {
-                val file = File(service.filesDir, "custom_aod_wallpaper.png")
-                if (file.exists()) {
-                    val customBmp = AppUtil.decodeSampledBitmapFromFile(file.absolutePath, reqWidth = 1440, reqHeight = 3200)
-                    if (customBmp != null) return customBmp
-                }
+                AppUtil.decodeSampledBitmapFromFile(WallpaperImages.aodCustomFile(service).absolutePath)?.let { return it }
+            }
+            // While Essentials draws the lock screen, the system's copy of that wallpaper is a live
+            // wallpaper with no image; the lock image itself is what the display should match.
+            if (WallpaperImages.drawsLock(service)) {
+                AppUtil.decodeSampledBitmapFromFile(WallpaperImages.lockFile(service).absolutePath)?.let { return it }
             }
 
             val wallpaperManager = WallpaperManager.getInstance(service)
@@ -821,16 +812,6 @@ class AodWallpaperOverlayHandler(
                         start()
                     }
                 }
-                if (imageView.scaleX != 1.0f || imageView.scaleY != 1.0f) {
-                    ObjectAnimator.ofFloat(imageView, "scaleX", imageView.scaleX, 1.0f).apply {
-                        duration = 500
-                        start()
-                    }
-                    ObjectAnimator.ofFloat(imageView, "scaleY", imageView.scaleY, 1.0f).apply {
-                        duration = 500
-                        start()
-                    }
-                }
             }
 
             ObjectAnimator.ofFloat(currentView, "alpha", currentView.alpha, 0f).apply {
@@ -840,8 +821,6 @@ class AodWallpaperOverlayHandler(
                         currentView.visibility = View.GONE
                         imageView?.translationX = 0f
                         imageView?.translationY = 0f
-                        imageView?.scaleX = 1.0f
-                        imageView?.scaleY = 1.0f
                         try {
                             windowManager?.removeView(currentView)
                         } catch (_: Exception) {
