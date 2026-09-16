@@ -343,6 +343,44 @@ class SettingsRepository(
         const val KEY_LOCK_CLOCK_SWAP_ELAPSED = "lock_clock_swap_elapsed"
         const val KEY_LOCK_CLOCK_AOD_TOP_LARGE = "lock_clock_aod_top_large"
         const val KEY_LOCK_CLOCK_AOD_TOP_SMALL = "lock_clock_aod_top_small"
+        const val KEY_LOCK_CLOCK_OUTLINE = "lock_clock_outline"
+        const val KEY_LOCK_CLOCK_DARK_VARIANT = "lock_clock_dark_variant"
+        const val KEY_LOCK_CLOCK_SPLIT = "lock_clock_split"
+        const val KEY_LOCK_CLOCK_SPLIT_SMALL = "lock_clock_split_small"
+
+        /** The wallpaper clock's own colours; the hours' first colour in light mode is the system clock's. */
+        const val LOCK_CLOCK_SLOT_DARK = "dark"
+        const val LOCK_CLOCK_SLOT_SECOND = "second"
+        const val LOCK_CLOCK_SLOT_SECOND_DARK = "second_dark"
+        const val LOCK_CLOCK_SLOT_MINUTES = "minutes"
+        const val LOCK_CLOCK_SLOT_MINUTES_DARK = "minutes_dark"
+        const val LOCK_CLOCK_SLOT_MINUTES_SECOND = "minutes_second"
+        const val LOCK_CLOCK_SLOT_MINUTES_SECOND_DARK = "minutes_second_dark"
+        val LOCK_CLOCK_COLOR_SLOTS =
+            listOf(
+                LOCK_CLOCK_SLOT_DARK,
+                LOCK_CLOCK_SLOT_SECOND,
+                LOCK_CLOCK_SLOT_SECOND_DARK,
+                LOCK_CLOCK_SLOT_MINUTES,
+                LOCK_CLOCK_SLOT_MINUTES_DARK,
+                LOCK_CLOCK_SLOT_MINUTES_SECOND,
+                LOCK_CLOCK_SLOT_MINUTES_SECOND_DARK,
+            )
+        /** Whether [key] is one of the wallpaper clock's colour, material or direction settings. */
+        fun isLockClockLookKey(key: String): Boolean =
+            key.startsWith("lock_clock_") &&
+                (key.endsWith("_color_id") || key.endsWith("_seed_color") || key.endsWith("_gradient") || key.endsWith("gradient_direction"))
+
+        /** The wallpaper clock's parts, each with a look of its own: the hours or the minutes, in light or in dark mode. */
+        val LOCK_CLOCK_PARTS = listOf("", "minutes", "dark", "minutes_dark")
+
+        fun lockClockPart(
+            minutes: Boolean,
+            dark: Boolean,
+        ): String = LOCK_CLOCK_PARTS[(if (minutes) 1 else 0) + (if (dark) 2 else 0)]
+        const val LOCK_CLOCK_GRADIENT_DOWN = "down"
+        const val LOCK_CLOCK_GRADIENT_RIGHT = "right"
+        const val LOCK_CLOCK_GRADIENT_DIAGONAL = "diagonal"
         const val WALLPAPER_IMAGE_SYSTEM = "system"
         const val WALLPAPER_IMAGE_PHOTO = "photo"
         const val WALLPAPER_IMAGE_LOCK = "lock"
@@ -3190,6 +3228,63 @@ class SettingsRepository(
     ) = putInt(lockClockAodTopKey(small), value)
 
     private fun lockClockAodTopKey(small: Boolean) = if (small) KEY_LOCK_CLOCK_AOD_TOP_SMALL else KEY_LOCK_CLOCK_AOD_TOP_LARGE
+
+    fun getLockClockOutline(): Boolean = getBoolean(KEY_LOCK_CLOCK_OUTLINE, false)
+
+    fun setLockClockOutline(value: Boolean) = putBoolean(KEY_LOCK_CLOCK_OUTLINE, value)
+
+    fun getLockClockDarkVariant(): Boolean = getBoolean(KEY_LOCK_CLOCK_DARK_VARIANT, false)
+
+    fun setLockClockDarkVariant(value: Boolean) = putBoolean(KEY_LOCK_CLOCK_DARK_VARIANT, value)
+
+    fun getLockClockSplit(): Boolean = getBoolean(KEY_LOCK_CLOCK_SPLIT, false)
+
+    fun setLockClockSplit(value: Boolean) = putBoolean(KEY_LOCK_CLOCK_SPLIT, value)
+
+    fun getLockClockSplitSmall(): Boolean = getBoolean(KEY_LOCK_CLOCK_SPLIT_SMALL, true)
+
+    fun setLockClockSplitSmall(value: Boolean) = putBoolean(KEY_LOCK_CLOCK_SPLIT_SMALL, value)
+
+    fun getLockClockColorId(slot: String): String = getString(lockClockKey(slot, "color_id"), "DEFAULT") ?: "DEFAULT"
+
+    fun setLockClockColorId(
+        slot: String,
+        value: String,
+    ) = putString(lockClockKey(slot, "color_id"), value)
+
+    fun getLockClockColorTone(slot: String): Int = getInt(lockClockKey(slot, "color_tone"), 75)
+
+    fun setLockClockColorTone(
+        slot: String,
+        value: Int,
+    ) = putInt(lockClockKey(slot, "color_tone"), value)
+
+    fun getLockClockSeedColor(slot: String): Int = getInt(lockClockKey(slot, "seed_color"), 0)
+
+    fun setLockClockSeedColor(
+        slot: String,
+        value: Int,
+    ) = putInt(lockClockKey(slot, "seed_color"), value)
+
+    fun getLockClockGradientDirection(part: String): String = getString(lockClockKey(part, "gradient_direction"), LOCK_CLOCK_GRADIENT_DOWN) ?: LOCK_CLOCK_GRADIENT_DOWN
+
+    fun setLockClockGradientDirection(
+        part: String,
+        value: String,
+    ) = putString(lockClockKey(part, "gradient_direction"), value)
+
+    fun getLockClockGradient(part: String): Boolean = getBoolean(lockClockKey(part, "gradient"), false)
+
+    fun setLockClockGradient(
+        part: String,
+        value: Boolean,
+    ) = putBoolean(lockClockKey(part, "gradient"), value)
+
+    /** A field of one colour slot or of one part; the hours in light mode are the unnamed part. */
+    private fun lockClockKey(
+        slot: String,
+        field: String,
+    ) = if (slot.isEmpty()) "lock_clock_$field" else "lock_clock_${slot}_$field"
 
     fun getLockClockSwapSlide(): Int = getInt(KEY_LOCK_CLOCK_SWAP_SLIDE)
 
