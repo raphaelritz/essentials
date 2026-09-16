@@ -11,6 +11,7 @@ package com.sameerasw.essentials.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.Rect
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.sameerasw.essentials.domain.HapticFeedbackType
@@ -331,6 +332,15 @@ class SettingsRepository(
         const val KEY_WALLPAPER_HOME_IMAGE = "wallpaper_home_image"
         const val KEY_WALLPAPER_LOCK_BLUR = "wallpaper_lock_blur"
         const val KEY_WALLPAPER_HOME_BLUR = "wallpaper_home_blur"
+        const val KEY_LOCK_CLOCK_IN_WALLPAPER = "lock_clock_in_wallpaper"
+        const val KEY_LOCK_CLOCK_SMALL = "lock_clock_small"
+        const val KEY_LOCK_CLOCK_RECT_LARGE = "lock_clock_rect_large"
+        const val KEY_LOCK_CLOCK_RECT_SMALL = "lock_clock_rect_small"
+        const val KEY_LOCK_CLOCK_COMPARE = "lock_clock_compare"
+        const val KEY_LOCK_CLOCK_SWAP_SLIDE = "lock_clock_swap_slide"
+        const val KEY_LOCK_CLOCK_SWAP_ELAPSED = "lock_clock_swap_elapsed"
+        const val KEY_LOCK_CLOCK_AOD_TOP_LARGE = "lock_clock_aod_top_large"
+        const val KEY_LOCK_CLOCK_AOD_TOP_SMALL = "lock_clock_aod_top_small"
         const val WALLPAPER_IMAGE_SYSTEM = "system"
         const val WALLPAPER_IMAGE_PHOTO = "photo"
         const val WALLPAPER_IMAGE_LOCK = "lock"
@@ -3148,6 +3158,44 @@ class SettingsRepository(
     fun getWallpaperHomeBlur(): Float = getFloat(KEY_WALLPAPER_HOME_BLUR, 0f)
 
     fun setWallpaperHomeBlur(value: Float) = putFloat(KEY_WALLPAPER_HOME_BLUR, value)
+
+    fun getLockClockInWallpaper(): Boolean = getBoolean(KEY_LOCK_CLOCK_IN_WALLPAPER, false)
+
+    fun setLockClockInWallpaper(value: Boolean) = putBoolean(KEY_LOCK_CLOCK_IN_WALLPAPER, value)
+
+    fun getLockClockCompare(): Boolean = getBoolean(KEY_LOCK_CLOCK_COMPARE, false)
+
+    fun setLockClockCompare(value: Boolean) = putBoolean(KEY_LOCK_CLOCK_COMPARE, value)
+
+    fun getLockClockSmall(): Boolean = getBoolean(KEY_LOCK_CLOCK_SMALL, false)
+
+    fun setLockClockSmall(value: Boolean) = putBoolean(KEY_LOCK_CLOCK_SMALL, value)
+
+    fun getLockClockRect(small: Boolean): Rect? = Rect.unflattenFromString(getString(lockClockRectKey(small), null))
+
+    fun setLockClockRect(
+        small: Boolean,
+        value: Rect,
+    ) = putString(lockClockRectKey(small), value.flattenToString())
+
+    private fun lockClockRectKey(small: Boolean) = if (small) KEY_LOCK_CLOCK_RECT_SMALL else KEY_LOCK_CLOCK_RECT_LARGE
+
+    fun getLockClockAodTop(small: Boolean): Int? = lockClockAodTopKey(small).takeIf(::contains)?.let { getInt(it) }
+
+    fun setLockClockAodTop(
+        small: Boolean,
+        value: Int,
+    ) = putInt(lockClockAodTopKey(small), value)
+
+    private fun lockClockAodTopKey(small: Boolean) = if (small) KEY_LOCK_CLOCK_AOD_TOP_SMALL else KEY_LOCK_CLOCK_AOD_TOP_LARGE
+
+    fun getLockClockSwapSlide(): Int = getInt(KEY_LOCK_CLOCK_SWAP_SLIDE)
+
+    fun setLockClockSwapSlide(value: Int) = putInt(KEY_LOCK_CLOCK_SWAP_SLIDE, value)
+
+    fun getLockClockSwapElapsed(): Long = getLong(KEY_LOCK_CLOCK_SWAP_ELAPSED)
+
+    fun setLockClockSwapElapsed(value: Long) = putLong(KEY_LOCK_CLOCK_SWAP_ELAPSED, value)
     fun isAodWallpaperUseAlbumArtEnabled(): Boolean = getBoolean(KEY_AOD_WALLPAPER_USE_ALBUM_ART, false)
 
     fun setAodWallpaperUseAlbumArt(enabled: Boolean) = putBoolean(KEY_AOD_WALLPAPER_USE_ALBUM_ART, enabled)

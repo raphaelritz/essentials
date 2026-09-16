@@ -2610,7 +2610,7 @@
     <string name="search_lock_screen_clock_size_title">Lock screen clock size</string>
     <string name="search_lock_screen_clock_size_desc">Two lines, one line, or one line while notifications show</string>
     <string name="unified_wallpaper_label">Essentials wallpaper</string>
-    <string name="unified_wallpaper_description">Draws your photos on the home and lock screen with adjustable blur</string>
+    <string name="unified_wallpaper_description">Draws your photos on the home and lock screen with adjustable blur, and the clock inside the wallpaper</string>
     <string name="essentials_wallpaper_title">Essentials wallpaper</string>
     <string name="essentials_wallpaper_active">Active on the home and lock screen</string>
     <string name="essentials_wallpaper_home_only">Set on the home screen only. The lock screen has to use it too.</string>
