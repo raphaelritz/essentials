@@ -69,6 +69,7 @@ import com.sameerasw.essentials.services.AppUpdateWorker
 import com.sameerasw.essentials.services.CaffeinateWakeLockService
 import com.sameerasw.essentials.services.NotificationLightingService
 import com.sameerasw.essentials.services.UnifiedWallpaperService
+import com.sameerasw.essentials.services.handlers.LockClockMeasurement
 import com.sameerasw.essentials.services.receivers.FlashlightActionReceiver
 import com.sameerasw.essentials.services.receivers.SecurityDeviceAdminReceiver
 import com.sameerasw.essentials.services.tiles.ScreenOffAccessibilityService
@@ -312,6 +313,8 @@ class MainViewModel : ViewModel() {
     val lockClockInWallpaper = mutableStateOf(false)
     val lockClockSupported = mutableStateOf(false)
     val lockClockCompare = mutableStateOf(false)
+    val lockClockMeasured = mutableStateOf(false)
+    val lockClockMeasuredHere = mutableStateOf(false)
 
     // Live Wallpaper
     val liveWallpaperSelectedVideo = mutableStateOf(SettingsRepository.LIVE_WALLPAPER_DEFAULT_VIDEO)
@@ -4201,6 +4204,8 @@ class MainViewModel : ViewModel() {
             coverage != WallpaperImages.Coverage.HOME_ONLY &&
             !WallpaperImages.isLive(context, WallpaperManager.FLAG_SYSTEM)
         lockClockSupported.value = LockClockLayer.supports(LockClockLayer.currentClockId(context))
+        lockClockMeasured.value = settingsRepository.getLockClockRect(true) != null && settingsRepository.getLockClockRect(false) != null
+        lockClockMeasuredHere.value = lockClockMeasured.value && settingsRepository.getLockClockLayoutKey() == LockClockMeasurement.layoutKey(context)
         if (lockClockInWallpaperActive != wasActive) setLockScreenClockId(lockScreenClockId.value ?: "DEFAULT", context)
     }
 

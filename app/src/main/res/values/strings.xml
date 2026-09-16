@@ -2643,6 +2643,7 @@
     <string name="search_wallpaper_home_blur_desc">Blur the home screen wallpaper</string>
     <string name="search_wallpaper_aod_image_title">Always-on display image</string>
     <string name="search_wallpaper_aod_image_desc">The lock screen image or a custom image on the always-on display</string>
+    <string name="lock_clock_measuring">Measuring the clock. Leave the screen alone until this disappears.</string>
     <string name="link_aod_settings">Always-on display</string>
     <string name="link_aod_settings_desc">Brightness, blur and timing of the always-on display</string>
     <string name="link_wallpaper_images">Wallpaper images</string>

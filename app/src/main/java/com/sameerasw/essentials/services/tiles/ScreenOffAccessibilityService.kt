@@ -39,6 +39,7 @@ import com.sameerasw.essentials.services.handlers.AodWallpaperOverlayHandler
 import com.sameerasw.essentials.services.handlers.AppFlowHandler
 import com.sameerasw.essentials.services.handlers.ButtonRemapHandler
 import com.sameerasw.essentials.services.handlers.DuoOverlayHandler
+import com.sameerasw.essentials.services.handlers.LockClockHandler
 import com.sameerasw.essentials.services.handlers.FlashlightHandler
 import com.sameerasw.essentials.services.handlers.NotificationLightingHandler
 import com.sameerasw.essentials.services.handlers.OmniGestureOverlayHandler
@@ -75,6 +76,8 @@ class ScreenOffAccessibilityService :
     private lateinit var smartPixelsHandler: com.sameerasw.essentials.services.handlers.SmartPixelsHandler
     private lateinit var duoOverlayHandler: DuoOverlayHandler
     private lateinit var statusGlanceHandler: StatusGlanceHandler
+    var lockClock: LockClockHandler? = null
+        private set
 
     private var lightSensor: Sensor? = null
     private var lightSensorLux: Float = 100f
@@ -335,6 +338,7 @@ class ScreenOffAccessibilityService :
                 .SmartPixelsHandler(this)
         duoOverlayHandler = DuoOverlayHandler(this)
         statusGlanceHandler = StatusGlanceHandler(this)
+        lockClock = LockClockHandler(this)
 
         flashlightHandler.register()
         statusBarIconHandler.register()
@@ -362,10 +366,12 @@ class ScreenOffAccessibilityService :
                             stopInputEventListener()
                             updateOmniOverlay()
                             updatePocketModeSensors()
+                            lockClock?.onScreenOn()
                         }
 
                         Intent.ACTION_SCREEN_OFF -> {
                             isScreenOn = false
+                            lockClock?.onScreenOff()
                             appFlowHandler.clearAuthenticated()
                             scheduleFreeze()
                             startInputEventListenerIfEnabled()
@@ -468,7 +474,8 @@ class ScreenOffAccessibilityService :
             serviceInfo.apply {
                 flags = flags or
                     AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS or
-                    AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+                    AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                    AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
             }
         updateOmniOverlay()
         duoOverlayHandler.updateState()
@@ -510,6 +517,7 @@ class ScreenOffAccessibilityService :
         smartPixelsHandler.destroy()
         duoOverlayHandler.destroy()
         statusGlanceHandler.destroy()
+        lockClock?.destroy()
         statusBarIconHandler.unregister()
         stopInputEventListener()
         cancelPocketFlashlightTurnOff()
@@ -535,10 +543,16 @@ class ScreenOffAccessibilityService :
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            if (event.packageName?.toString() == "com.android.systemui") lockClock?.onSystemUiChanged(event.contentChangeTypes, event.windowId)
+            return
+        }
+
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val packageName = event.packageName?.toString()
             if (packageName != null) {
                 appFlowHandler.onPackageChanged(packageName)
+                if (packageName == "com.android.systemui") lockClock?.onSystemUiChanged(0, event.windowId)
             }
         }
 
@@ -575,6 +589,8 @@ class ScreenOffAccessibilityService :
     }
 
     private fun checkFullscreenState() {
+        // Fetching the window list is an IPC per event on the thread the wallpaper engine draws on; only Duo needs the answer.
+        if (!SettingsRepository(this).isDuoEnabled()) return
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             try {
                 val currentWindows = windows
