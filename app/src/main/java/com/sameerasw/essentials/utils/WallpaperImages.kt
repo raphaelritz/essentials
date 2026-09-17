@@ -15,6 +15,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.ColorSpace
+import android.graphics.RectF
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Build
@@ -30,6 +31,7 @@ object WallpaperImages {
     private const val LOCK_FILE = "wallpaper_lock.jpg"
     private const val HOME_FILE = "wallpaper_home.jpg"
     private const val AOD_CUSTOM_FILE = "custom_aod_wallpaper.png"
+    private const val LOCK_DEPTH_FILE = "wallpaper_lock_depth.png"
     private const val JPEG_QUALITY = 95
 
     /** Which screens the Essentials wallpaper is set on. */
@@ -40,6 +42,9 @@ object WallpaperImages {
     fun homeFile(context: Context): File = File(context.filesDir, HOME_FILE)
 
     fun aodCustomFile(context: Context): File = File(context.filesDir, AOD_CUSTOM_FILE)
+
+    /** The lock photo's depth map, cropped as the photo was, so the two line up whatever resolution the map came in. */
+    fun lockDepthFile(context: Context): File = File(context.filesDir, LOCK_DEPTH_FILE)
 
     fun coverage(context: Context): Coverage {
         val manager = WallpaperManager.getInstance(context)
@@ -142,6 +147,20 @@ object WallpaperImages {
         val cropped = Bitmap.createBitmap(scaled, (scaledWidth - targetWidth) / 2, (scaledHeight - targetHeight) / 2, targetWidth, targetHeight)
         if (scaled !== cropped && scaled !== source) scaled.recycle()
         return cropped
+    }
+
+    /** Where [bitmap] lands when it covers a [width] by [height] surface: centred, with no horizontal travel. */
+    fun cover(
+        bitmap: Bitmap,
+        width: Int,
+        height: Int,
+    ): RectF {
+        val scale = maxOf(width.toFloat() / bitmap.width, height.toFloat() / bitmap.height)
+        val scaledWidth = bitmap.width * scale
+        val scaledHeight = bitmap.height * scale
+        val left = -(scaledWidth - width) / 2f
+        val top = -(scaledHeight - height) / 2f
+        return RectF(left, top, left + scaledWidth, top + scaledHeight)
     }
 
     fun save(

@@ -50,6 +50,8 @@ import com.sameerasw.essentials.viewmodels.MainViewModel
 
 private const val BLUR_SLIDER_MAX = 25f
 private const val AOD_IMAGE_CUSTOM = "custom"
+private const val DEPTH_NONE = "none"
+private const val DEPTH_MAP = "map"
 
 @Composable
 fun PhotoWallpaperTab(
@@ -68,6 +70,7 @@ fun PhotoWallpaperTab(
     val lockKeepable by viewModel.wallpaperLockKeepable
     val homeKeepable by viewModel.wallpaperHomeKeepable
     val hasCustomAod by viewModel.hasAodWallpaperCustomImage
+    val hasDepthMap by viewModel.wallpaperDepthMap
     var setupAwaitingPhoto by remember { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -96,6 +99,10 @@ fun PhotoWallpaperTab(
     val aodPhotoPicker =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let { viewModel.setCustomAodWallpaper(context, it) }
+        }
+    val depthMapPicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            uri?.let { viewModel.setWallpaperLockDepth(context, it) }
         }
 
     Column(
@@ -161,6 +168,12 @@ fun PhotoWallpaperTab(
                     }
                 },
             )
+            ImageChoice(
+                selected = if (hasDepthMap) DEPTH_MAP else DEPTH_NONE,
+                title = R.string.wallpaper_depth,
+                options = listOf(DEPTH_NONE to R.string.wallpaper_depth_none, DEPTH_MAP to R.string.wallpaper_depth_map),
+                onSelect = { kind -> if (kind == DEPTH_MAP) depthMapPicker.launch("image/*") else viewModel.removeWallpaperLockDepth(context) },
+            )
             ConfigSliderItem(
                 title = stringResource(R.string.wallpaper_blur),
                 value = viewModel.wallpaperLockBlur.floatValue,
@@ -170,6 +183,12 @@ fun PhotoWallpaperTab(
                 iconRes = R.drawable.rounded_blur_on_24,
             )
         }
+        Text(
+            text = stringResource(R.string.wallpaper_depth_intro),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         SectionTitle(R.string.wallpaper_section_home)
         RoundedCardContainer {
@@ -256,6 +275,7 @@ private fun ImageChoice(
     options: List<Pair<String, Int>>,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
+    title: Int = R.string.wallpaper_image,
 ) {
     val labelled = options.map { it.first to stringResource(it.second) }
     SegmentedPicker(
@@ -263,7 +283,7 @@ private fun ImageChoice(
         selectedItem = labelled.firstOrNull { it.first == selected } ?: labelled.first(),
         onItemSelected = { onSelect(it.first) },
         labelProvider = { it.second },
-        title = stringResource(R.string.wallpaper_image),
+        title = stringResource(title),
         modifier = modifier.fillMaxWidth(),
     )
 }

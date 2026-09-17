@@ -37,6 +37,7 @@ import com.sameerasw.essentials.data.repository.SettingsRepository
 import com.sameerasw.essentials.utils.LockClockLayer
 import com.sameerasw.essentials.utils.WallpaperBlurUtil
 import com.sameerasw.essentials.utils.WallpaperImages
+import com.sameerasw.essentials.utils.WallpaperSubject
 
 /**
  * One engine set for both screens. The lock look is the lock image, its blur and the hosted clock;
@@ -65,6 +66,10 @@ class UnifiedWallpaperService : WallpaperService() {
         private var homeBlurred: Bitmap? = null
         private var lockBlurredFor = -1f
         private var homeBlurredFor = -1f
+        private var lockDepth: Bitmap? = null
+        private var subject: Bitmap? = null
+        private var subjectCut: SubjectCut? = null
+        private val subjectPaint = Paint(FILTER_PAINT)
         private var surfaceWidth = 0
         private var surfaceHeight = 0
 
@@ -84,6 +89,9 @@ class UnifiedWallpaperService : WallpaperService() {
                     -> reload()
                     SettingsRepository.KEY_WALLPAPER_LOCK_BLUR,
                     SettingsRepository.KEY_WALLPAPER_HOME_BLUR,
+                    SettingsRepository.KEY_WALLPAPER_DEPTH_LEVEL,
+                    SettingsRepository.KEY_WALLPAPER_DEPTH_SOFTNESS,
+                    SettingsRepository.KEY_WALLPAPER_DEPTH_NEAR_IS_DARK,
                     -> draw()
                     SettingsRepository.KEY_LOCK_CLOCK_IN_WALLPAPER,
                     -> {
@@ -259,10 +267,16 @@ class UnifiedWallpaperService : WallpaperService() {
                 } else {
                     WallpaperImages.decodeForSurface(WallpaperImages.homeFile(applicationContext), surfaceWidth, surfaceHeight) ?: lockSource
                 }
+            lockDepth = WallpaperImages.decodeForSurface(WallpaperImages.lockDepthFile(applicationContext), surfaceWidth, surfaceHeight)
             draw()
         }
 
         private fun recycleImages() {
+            subject?.recycle()
+            subject = null
+            subjectCut = null
+            lockDepth?.recycle()
+            lockDepth = null
             lockBlurred?.recycle()
             homeBlurred?.recycle()
             lockBlurred = null
@@ -288,6 +302,12 @@ class UnifiedWallpaperService : WallpaperService() {
                 homeBlurred = homeSource?.let { WallpaperBlurUtil.blur(it, homeBlur) }
                 homeBlurredFor = homeBlur
             }
+            val depth = lockDepth ?: return
+            val cut = SubjectCut(repository.getWallpaperDepthLevel(), repository.getWallpaperDepthSoftness(), repository.getWallpaperDepthNearIsDark(), lockBlur)
+            if (cut == subjectCut) return
+            subject?.recycle()
+            subject = (lockBlurred ?: lockSource)?.let { WallpaperSubject.cut(it, depth, cut.level, cut.softness, cut.nearIsDark) }
+            subjectCut = cut
         }
 
         private fun draw() {
@@ -318,6 +338,10 @@ class UnifiedWallpaperService : WallpaperService() {
             if (clockWanted) {
                 clock.setBackdrop(lock, lock?.let(::destinationFor))
                 clock.draw(canvas, unlockProgress)
+                subject?.let {
+                    subjectPaint.alpha = ((1f - unlockProgress) * 255).toInt()
+                    canvas.drawBitmap(it, null, destinationFor(it), subjectPaint)
+                }
             }
         }
 
@@ -329,15 +353,7 @@ class UnifiedWallpaperService : WallpaperService() {
             votedRefreshRate = rate
         }
 
-        /** Centre-crops the bitmap over the surface, with no horizontal travel. */
-        private fun destinationFor(bitmap: Bitmap): RectF {
-            val scale = maxOf(surfaceWidth.toFloat() / bitmap.width, surfaceHeight.toFloat() / bitmap.height)
-            val scaledWidth = bitmap.width * scale
-            val scaledHeight = bitmap.height * scale
-            val left = -(scaledWidth - surfaceWidth) / 2f
-            val top = -(scaledHeight - surfaceHeight) / 2f
-            return RectF(left, top, left + scaledWidth, top + scaledHeight)
-        }
+        private fun destinationFor(bitmap: Bitmap): RectF = WallpaperImages.cover(bitmap, surfaceWidth, surfaceHeight)
 
         override fun onDestroy() {
             unlockAnimator?.cancel()
@@ -350,3 +366,11 @@ class UnifiedWallpaperService : WallpaperService() {
         }
     }
 }
+
+/** What the subject was last cut with; a change in any of it means cutting again. */
+private data class SubjectCut(
+    val level: Float,
+    val softness: Float,
+    val nearIsDark: Boolean,
+    val blur: Float,
+)

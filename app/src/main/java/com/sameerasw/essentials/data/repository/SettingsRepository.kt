@@ -333,6 +333,9 @@ class SettingsRepository(
         const val KEY_WALLPAPER_HOME_IMAGE = "wallpaper_home_image"
         const val KEY_WALLPAPER_LOCK_BLUR = "wallpaper_lock_blur"
         const val KEY_WALLPAPER_HOME_BLUR = "wallpaper_home_blur"
+        const val KEY_WALLPAPER_DEPTH_LEVEL = "wallpaper_depth_level"
+        const val KEY_WALLPAPER_DEPTH_SOFTNESS = "wallpaper_depth_softness"
+        const val KEY_WALLPAPER_DEPTH_NEAR_IS_DARK = "wallpaper_depth_near_is_dark"
         const val KEY_LOCK_CLOCK_IN_WALLPAPER = "lock_clock_in_wallpaper"
         const val KEY_LOCK_CLOCK_SMALL = "lock_clock_small"
         const val KEY_LOCK_CLOCK_RECT_LARGE = "lock_clock_rect_large"
@@ -3202,6 +3205,18 @@ class SettingsRepository(
     fun getWallpaperHomeBlur(): Float = getFloat(KEY_WALLPAPER_HOME_BLUR, 0f)
 
     fun setWallpaperHomeBlur(value: Float) = putFloat(KEY_WALLPAPER_HOME_BLUR, value)
+
+    fun getWallpaperDepthLevel(): Float = getFloat(KEY_WALLPAPER_DEPTH_LEVEL, 0.5f)
+
+    fun setWallpaperDepthLevel(value: Float) = putFloat(KEY_WALLPAPER_DEPTH_LEVEL, value)
+
+    fun getWallpaperDepthSoftness(): Float = getFloat(KEY_WALLPAPER_DEPTH_SOFTNESS, 0.05f)
+
+    fun setWallpaperDepthSoftness(value: Float) = putFloat(KEY_WALLPAPER_DEPTH_SOFTNESS, value)
+
+    fun getWallpaperDepthNearIsDark(): Boolean = getBoolean(KEY_WALLPAPER_DEPTH_NEAR_IS_DARK, false)
+
+    fun setWallpaperDepthNearIsDark(value: Boolean) = putBoolean(KEY_WALLPAPER_DEPTH_NEAR_IS_DARK, value)
 
     fun getLockClockInWallpaper(): Boolean = getBoolean(KEY_LOCK_CLOCK_IN_WALLPAPER, false)
 

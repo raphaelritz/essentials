@@ -2632,6 +2632,11 @@
     <string name="wallpaper_image_already_essentials">Essentials already draws this screen</string>
     <string name="wallpaper_image_unavailable">Could not read the image</string>
     <string name="wallpaper_blur">Blur</string>
+    <string name="wallpaper_depth">Depth</string>
+    <string name="wallpaper_depth_none">None</string>
+    <string name="wallpaper_depth_map">Depth map</string>
+    <string name="wallpaper_depth_unreadable">Not a depth map the app can read. Use the plain depth export, grey or coloured, without the photo showing through</string>
+    <string name="wallpaper_depth_intro">A depth map is a picture of the photo whose shades stand for distance, grey or in the colour scales the usual tools use. Marigold or Depth Pro make one from the photo, at any resolution. With a map imported, the wallpaper clock goes behind whatever is nearer than a depth you choose on the Lock screen clock page.</string>
     <string name="search_essentials_wallpaper_desc">Let Essentials draw the home and lock screen from your photos, with blur</string>
     <string name="search_wallpaper_lock_image_title">Lock screen image</string>
     <string name="search_wallpaper_lock_image_desc">Keep the current wallpaper or choose a photo for the lock screen</string>
@@ -2696,6 +2701,13 @@
     <string name="lock_clock_remeasure_text">This changes where the system puts the clock, so the wallpaper clock needs a new measurement. The phone locks and wakes by itself for a few seconds.</string>
     <string name="lock_clock_measure_action">Measure</string>
     <string name="lock_clock_section">Wallpaper clock</string>
+    <string name="lock_clock_depth_section">Subject in front</string>
+    <string name="lock_clock_depth_level">Depth level</string>
+    <string name="lock_clock_depth_softness">Edge softness</string>
+    <string name="lock_clock_depth_flip_title">Near and far swapped</string>
+    <string name="lock_clock_depth_flip_desc">Turn on when the background, not the subject, ends up in front of the clock</string>
+    <string name="lock_clock_depth_clear">The subject stays clear of the clock here, so nothing will stand in front of it</string>
+    <string name="lock_clock_depth_covering">The subject covers %1$d %% of the clock here, so the time may be hard to read</string>
     <string name="lock_clock_needs_wallpaper">Not set. Tap to set it up under Wallpapers.</string>
     <string name="lock_screen_clock_hide_forced_desc">Hidden while the Essentials wallpaper draws the clock</string>
     <string name="link_aod_settings">Always-on display</string>

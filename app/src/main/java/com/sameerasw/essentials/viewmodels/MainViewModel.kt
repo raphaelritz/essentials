@@ -77,6 +77,7 @@ import com.sameerasw.essentials.services.tiles.ScreenOffAccessibilityService
 import com.sameerasw.essentials.utils.AppIconUtil
 import com.sameerasw.essentials.utils.AppUtil
 import com.sameerasw.essentials.utils.DeviceUtils
+import com.sameerasw.essentials.utils.DepthPalettes
 import com.sameerasw.essentials.utils.HostedClock
 import com.sameerasw.essentials.utils.LockClockLayer
 import com.sameerasw.essentials.utils.LockScreenClockSize
@@ -308,6 +309,10 @@ class MainViewModel : ViewModel() {
     val wallpaperHomeImage = mutableStateOf(SettingsRepository.WALLPAPER_IMAGE_LOCK)
     val wallpaperLockBlur = mutableFloatStateOf(0f)
     val wallpaperHomeBlur = mutableFloatStateOf(0f)
+    val wallpaperDepthMap = mutableStateOf(false)
+    val wallpaperDepthLevel = mutableFloatStateOf(0.5f)
+    val wallpaperDepthSoftness = mutableFloatStateOf(0.05f)
+    val wallpaperDepthNearIsDark = mutableStateOf(false)
 
     /** Whether the system's own image on that screen can still be copied in: not ours yet, and not a live wallpaper. */
     val wallpaperLockKeepable = mutableStateOf(false)
@@ -1616,6 +1621,10 @@ class MainViewModel : ViewModel() {
         wallpaperHomeImage.value = settingsRepository.getWallpaperHomeImage()
         wallpaperLockBlur.floatValue = settingsRepository.getWallpaperLockBlur()
         wallpaperHomeBlur.floatValue = settingsRepository.getWallpaperHomeBlur()
+        wallpaperDepthMap.value = WallpaperImages.lockDepthFile(context).exists()
+        wallpaperDepthLevel.floatValue = settingsRepository.getWallpaperDepthLevel()
+        wallpaperDepthSoftness.floatValue = settingsRepository.getWallpaperDepthSoftness()
+        wallpaperDepthNearIsDark.value = settingsRepository.getWallpaperDepthNearIsDark()
         lockClockInWallpaper.value = settingsRepository.getLockClockInWallpaper()
         lockClockCompare.value = settingsRepository.getLockClockCompare()
         lockClockOutline.value = settingsRepository.getLockClockOutline()
@@ -4404,9 +4413,13 @@ class MainViewModel : ViewModel() {
             val saved = saveWallpaperImage(context, WallpaperImages.lockFile(context), WallpaperManager.FLAG_LOCK, uri)
             if (saved) {
                 settingsRepository.setWallpaperLockImage(if (uri == null) SettingsRepository.WALLPAPER_IMAGE_SYSTEM else SettingsRepository.WALLPAPER_IMAGE_PHOTO)
+                // A depth map belongs to one photo.
+                WallpaperImages.lockDepthFile(context).delete()
+                settingsRepository.bumpWallpaperRevision()
             }
             withContext(Dispatchers.Main) {
                 wallpaperLockImage.value = settingsRepository.getWallpaperLockImage()
+                wallpaperDepthMap.value = WallpaperImages.lockDepthFile(context).exists()
                 if (saved) onDone() else Toast.makeText(context, R.string.wallpaper_image_unavailable, Toast.LENGTH_SHORT).show()
             }
         }
@@ -4422,7 +4435,10 @@ class MainViewModel : ViewModel() {
             val saved =
                 kind == SettingsRepository.WALLPAPER_IMAGE_LOCK ||
                     saveWallpaperImage(context, WallpaperImages.homeFile(context), WallpaperManager.FLAG_SYSTEM, uri)
-            if (saved) settingsRepository.setWallpaperHomeImage(kind)
+            if (saved) {
+                settingsRepository.setWallpaperHomeImage(kind)
+                if (kind != SettingsRepository.WALLPAPER_IMAGE_LOCK) settingsRepository.bumpWallpaperRevision()
+            }
             withContext(Dispatchers.Main) {
                 wallpaperHomeImage.value = settingsRepository.getWallpaperHomeImage()
                 if (!saved) Toast.makeText(context, R.string.wallpaper_image_unavailable, Toast.LENGTH_SHORT).show()
@@ -4443,7 +4459,6 @@ class MainViewModel : ViewModel() {
                 WallpaperImages.decode(context, uri)?.let { WallpaperImages.cropToScreen(context, it) }
             } ?: return false
         WallpaperImages.save(file, bitmap)
-        settingsRepository.bumpWallpaperRevision()
         return true
     }
 
@@ -4455,6 +4470,45 @@ class MainViewModel : ViewModel() {
     fun setWallpaperHomeBlur(value: Float) {
         wallpaperHomeBlur.floatValue = value
         settingsRepository.setWallpaperHomeBlur(value)
+    }
+
+    /** The lock photo's depth map, cropped as the photo was, so the two line up at any resolution the map came in. */
+    fun setWallpaperLockDepth(
+        context: Context,
+        uri: Uri,
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val grey = WallpaperImages.decode(context, uri)?.let { DepthPalettes.toGrey(context.resources, it) }
+            if (grey != null) {
+                WallpaperImages.save(WallpaperImages.lockDepthFile(context), WallpaperImages.cropToScreen(context, grey))
+                settingsRepository.bumpWallpaperRevision()
+            }
+            withContext(Dispatchers.Main) {
+                wallpaperDepthMap.value = WallpaperImages.lockDepthFile(context).exists()
+                if (grey == null) Toast.makeText(context, R.string.wallpaper_depth_unreadable, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun removeWallpaperLockDepth(context: Context) {
+        WallpaperImages.lockDepthFile(context).delete()
+        settingsRepository.bumpWallpaperRevision()
+        wallpaperDepthMap.value = false
+    }
+
+    fun setWallpaperDepthLevel(value: Float) {
+        wallpaperDepthLevel.floatValue = value
+        settingsRepository.setWallpaperDepthLevel(value)
+    }
+
+    fun setWallpaperDepthSoftness(value: Float) {
+        wallpaperDepthSoftness.floatValue = value
+        settingsRepository.setWallpaperDepthSoftness(value)
+    }
+
+    fun setWallpaperDepthNearIsDark(value: Boolean) {
+        wallpaperDepthNearIsDark.value = value
+        settingsRepository.setWallpaperDepthNearIsDark(value)
     }
 
     /** Measures where the keyguard puts each clock face; the phone locks and wakes itself for it. */

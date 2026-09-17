@@ -11,6 +11,8 @@ package com.sameerasw.essentials.ui.features.system
 
 import android.content.Intent
 import android.os.Build
+import android.graphics.Bitmap
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -38,6 +41,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +54,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -68,9 +74,20 @@ import com.sameerasw.essentials.ui.core.sheets.PermissionsBottomSheet
 import com.sameerasw.essentials.utils.HapticUtil
 import com.sameerasw.essentials.utils.LockClockLayer
 import com.sameerasw.essentials.utils.LockScreenClockSize
+import com.sameerasw.essentials.utils.LockScreenPreview
 import com.sameerasw.essentials.utils.PermissionUIHelper
 import com.sameerasw.essentials.utils.WallpaperImages
 import com.sameerasw.essentials.viewmodels.MainViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+
+/** A slider drag settles for this long before the preview renders again. */
+private const val PREVIEW_SETTLE_MS = 40L
+private const val PREVIEW_WIDTH_FRACTION = 0.6f
+
+/** Shares of the clock's box under the subject below and above which the preview warns. */
+private const val SUBJECT_CLEAR_OF_CLOCK = 0.02f
+private const val SUBJECT_COVERING_CLOCK = 0.5f
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -438,6 +455,43 @@ fun LockScreenClockSettingsUI(
                         onCheckedChange = { viewModel.setLockClockOutline(it) },
                     )
                 }
+            }
+        }
+
+        if (clockInWallpaper && viewModel.wallpaperDepthMap.value) {
+            Text(
+                text = stringResource(R.string.lock_clock_depth_section),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            RoundedCardContainer {
+                DepthPreview(viewModel)
+                ConfigSliderItem(
+                    title = stringResource(R.string.lock_clock_depth_level),
+                    value = viewModel.wallpaperDepthLevel.floatValue,
+                    onValueChange = { viewModel.setWallpaperDepthLevel(it) },
+                    valueRange = 0f..1f,
+                    increment = 0.01f,
+                    valueFormatter = { "${(it * 100).toInt()} %" },
+                    iconRes = R.drawable.rounded_blur_linear_24,
+                )
+                ConfigSliderItem(
+                    title = stringResource(R.string.lock_clock_depth_softness),
+                    value = viewModel.wallpaperDepthSoftness.floatValue,
+                    onValueChange = { viewModel.setWallpaperDepthSoftness(it) },
+                    valueRange = 0f..0.5f,
+                    increment = 0.01f,
+                    valueFormatter = { "${(it * 100).toInt()} %" },
+                    iconRes = R.drawable.rounded_blur_on_24,
+                )
+                IconToggleItem(
+                    iconRes = R.drawable.rounded_invert_colors_24,
+                    title = stringResource(R.string.lock_clock_depth_flip_title),
+                    description = stringResource(R.string.lock_clock_depth_flip_desc),
+                    isChecked = viewModel.wallpaperDepthNearIsDark.value,
+                    onCheckedChange = { viewModel.setWallpaperDepthNearIsDark(it) },
+                )
             }
         }
 
@@ -862,6 +916,63 @@ fun ColorCircle(
                         .clip(CircleShape)
                         .background(if (colorOption.id == "DEFAULT") MaterialTheme.colorScheme.primary else Color.White),
             )
+        }
+    }
+}
+
+/** The lock screen with the subject cut at the current depth, one face at a time, and whether the subject meets that face. */
+@Composable
+private fun DepthPreview(viewModel: MainViewModel) {
+    val context = LocalContext.current
+    val preview = remember { LockScreenPreview(context, SettingsRepository(context)) }
+    DisposableEffect(preview) { onDispose { preview.release() } }
+    var small by remember { mutableStateOf(false) }
+    var subject by remember { mutableStateOf<Bitmap?>(null) }
+    var covered by remember { mutableStateOf<Float?>(null) }
+    LaunchedEffect(preview) {
+        snapshotFlow { Triple(viewModel.wallpaperDepthLevel.floatValue, viewModel.wallpaperDepthSoftness.floatValue, viewModel.wallpaperDepthNearIsDark.value) }
+            .collectLatest { (level, softness, nearIsDark) ->
+                delay(PREVIEW_SETTLE_MS)
+                subject = preview.cut(level, softness, nearIsDark)
+            }
+    }
+    LaunchedEffect(subject, small) { covered = preview.coverage(small, subject) }
+    val large = stringResource(R.string.lock_screen_clock_size_large)
+    val smallLabel = stringResource(R.string.lock_screen_clock_size_small)
+    Column(
+        modifier = Modifier.padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Canvas(
+            modifier =
+                Modifier
+                    .fillMaxWidth(PREVIEW_WIDTH_FRACTION)
+                    .align(Alignment.CenterHorizontally)
+                    .aspectRatio(preview.width.toFloat() / preview.height)
+                    .clip(RoundedCornerShape(24.dp)),
+        ) {
+            drawIntoCanvas { preview.draw(it.nativeCanvas, small, size.width / preview.width, subject) }
+        }
+        SegmentedPicker(
+            items = listOf(false, true),
+            selectedItem = small,
+            onItemSelected = { small = it },
+            labelProvider = { if (it) smallLabel else large },
+        )
+        covered?.let { covered ->
+            val warning =
+                when {
+                    covered < SUBJECT_CLEAR_OF_CLOCK -> stringResource(R.string.lock_clock_depth_clear)
+                    covered > SUBJECT_COVERING_CLOCK -> stringResource(R.string.lock_clock_depth_covering, (covered * 100).toInt())
+                    else -> null
+                }
+            warning?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 }

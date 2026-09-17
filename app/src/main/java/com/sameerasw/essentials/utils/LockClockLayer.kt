@@ -425,6 +425,27 @@ class LockClockLayer(
         canvas.restore()
     }
 
+    /** One face at rest where the keyguard puts it, as the lock screen shows it, for the settings page's preview. */
+    fun drawStill(
+        canvas: Canvas,
+        small: Boolean,
+    ) {
+        val hosted = hosted ?: return
+        val rect = repository.getLockClockRect(small) ?: return
+        hosted.fit(small, rect)
+        placement.reset()
+        tint(whiteness = 0f)
+        drawFace(canvas, hosted, small, rect, 1f)
+    }
+
+    /** Where [drawStill] paints the face, or null while the face is unmeasured or unhosted. */
+    fun stillBounds(small: Boolean): RectF? {
+        val hosted = hosted ?: return null
+        val rect = repository.getLockClockRect(small) ?: return null
+        hosted.fit(small, rect)
+        return hosted.painted(small, FACE_SCALE).apply { offset(rect.left.toFloat(), rect.top.toFloat()) }
+    }
+
     /** The lock wallpaper as the engine draws it and where, for the glass to show through the digits. */
     fun setBackdrop(
         shown: Bitmap?,
