@@ -94,6 +94,19 @@ fun LockScreenClockSettingsUI(
     val clockInWallpaper = viewModel.lockClockInWallpaperActive
     var requestingPermissionsFor by remember { mutableStateOf<Pair<Int, List<String>>?>(null) }
     var styleToConfirm by remember { mutableStateOf<ClockOption?>(null) }
+    var measureToConfirm by remember { mutableStateOf<MeasureChoice?>(null) }
+    var dragFrom by remember { mutableStateOf<Int?>(null) }
+    val switchClock = { id: String ->
+        if (clockInWallpaper && !viewModel.lockClockMeasuredFor(id, context)) {
+            measureToConfirm = MeasureChoice(apply = { viewModel.setLockScreenClockId(id, context) }, undo = {})
+        } else {
+            viewModel.setLockScreenClockId(id, context)
+        }
+    }
+    val sliderReleased = { undo: () -> Unit ->
+        dragFrom = null
+        if (clockInWallpaper && !viewModel.lockClockMeasuredHere.value) measureToConfirm = MeasureChoice(apply = {}, undo = undo)
+    }
     val missingPermissions =
         listOfNotNull(
             "ACCESSIBILITY".takeIf { !accessibilityEnabled },
@@ -133,6 +146,33 @@ fun LockScreenClockSettingsUI(
             },
             title = { Text(stringResource(R.string.lock_clock_turn_off_title)) },
             text = { Text(stringResource(R.string.lock_clock_turn_off_text)) },
+        )
+    }
+    measureToConfirm?.let { choice ->
+        AlertDialog(
+            onDismissRequest = {
+                choice.undo()
+                measureToConfirm = null
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    measureToConfirm = null
+                    choice.apply()
+                    viewModel.measureLockClock(context)
+                }) {
+                    Text(stringResource(R.string.lock_clock_measure_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    choice.undo()
+                    measureToConfirm = null
+                }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+            title = { Text(stringResource(R.string.lock_clock_remeasure_title)) },
+            text = { Text(stringResource(R.string.lock_clock_remeasure_text)) },
         )
     }
 
@@ -285,10 +325,10 @@ fun LockScreenClockSettingsUI(
                                     styleToConfirm = option
                                 } else if (option.id == "DEFAULT") {
                                     if (!isDefaultStyleSelected) {
-                                        viewModel.setLockScreenClockId("DEFAULT", context)
+                                        switchClock("DEFAULT")
                                     }
                                 } else {
-                                    viewModel.setLockScreenClockId(option.id, context)
+                                    switchClock(option.id)
                                 }
                             }
                         },
@@ -413,14 +453,18 @@ fun LockScreenClockSettingsUI(
                 SegmentedPicker(
                     items = listOf("DEFAULT", "DIGITAL_CLOCK_FLEX"),
                     selectedItem = currentClockId ?: "DEFAULT",
-                    onItemSelected = { viewModel.setLockScreenClockId(it, context) },
+                    onItemSelected = switchClock,
                     labelProvider = { if (it == "DEFAULT") "Default" else "Flex" },
                 )
 
                 ConfigSliderItem(
                     title = stringResource(R.string.label_weight),
                     value = viewModel.lockScreenClockWeight.intValue.toFloat(),
-                    onValueChange = { viewModel.setLockScreenClockWeight(it.toInt(), context) },
+                    onValueChange = {
+                        if (dragFrom == null) dragFrom = viewModel.lockScreenClockWeight.intValue
+                        viewModel.setLockScreenClockWeight(it.toInt(), context)
+                    },
+                    onValueChangeFinished = { dragFrom?.let { from -> sliderReleased { viewModel.setLockScreenClockWeight(from, context) } } },
                     valueRange = 100f..1000f,
                     increment = 10f,
                     valueFormatter = { it.toInt().toString() },
@@ -430,7 +474,11 @@ fun LockScreenClockSettingsUI(
                 ConfigSliderItem(
                     title = stringResource(R.string.label_width),
                     value = viewModel.lockScreenClockWidth.intValue.toFloat(),
-                    onValueChange = { viewModel.setLockScreenClockWidth(it.toInt(), context) },
+                    onValueChange = {
+                        if (dragFrom == null) dragFrom = viewModel.lockScreenClockWidth.intValue
+                        viewModel.setLockScreenClockWidth(it.toInt(), context)
+                    },
+                    onValueChangeFinished = { dragFrom?.let { from -> sliderReleased { viewModel.setLockScreenClockWidth(from, context) } } },
                     valueRange = 25f..200f,
                     increment = 5f,
                     valueFormatter = { it.toInt().toString() },
@@ -817,6 +865,12 @@ fun ColorCircle(
         }
     }
 }
+
+/** A change that leaves the wallpaper clock unmeasured: applied together with a measurement, or undone. */
+private class MeasureChoice(
+    val apply: () -> Unit,
+    val undo: () -> Unit,
+)
 
 data class ClockOption(
     val id: String,

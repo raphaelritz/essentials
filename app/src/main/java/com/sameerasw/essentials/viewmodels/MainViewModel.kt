@@ -4564,8 +4564,17 @@ class MainViewModel : ViewModel() {
 
     private fun refreshLockClockMeasured(context: Context) {
         lockClockMeasured.value = settingsRepository.getLockClockRect(true) != null && settingsRepository.getLockClockRect(false) != null
-        lockClockMeasuredHere.value = lockClockMeasured.value && settingsRepository.getLockClockLayoutKey() == LockClockMeasurement.layoutKey(context)
+        lockClockMeasuredHere.value = lockClockMeasuredFor(HostedClock.currentClockId(context), context)
     }
+
+    /** Whether [clockId] has a measurement that still fits: this screen, and the sliders as they stand. */
+    fun lockClockMeasuredFor(
+        clockId: String,
+        context: Context,
+    ): Boolean =
+        settingsRepository.getLockClockRect(true, clockId) != null &&
+            settingsRepository.getLockClockRect(false, clockId) != null &&
+            settingsRepository.getLockClockLayoutKey(clockId) == LockClockMeasurement.layoutKey(context, clockId)
 
     /**
      * Executes the set lock screen clock weight operation.

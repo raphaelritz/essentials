@@ -2692,6 +2692,9 @@
     <string name="lock_clock_measuring">Measuring the clock. Leave the screen alone until this disappears.</string>
     <string name="lock_clock_measured">Measured for this clock on this screen layout. Tap to measure again</string>
     <string name="lock_clock_measure_stale">The screen layout changed since the last measurement. Tap to measure again</string>
+    <string name="lock_clock_remeasure_title">Measure the clock again?</string>
+    <string name="lock_clock_remeasure_text">This changes where the system puts the clock, so the wallpaper clock needs a new measurement. The phone locks and wakes by itself for a few seconds.</string>
+    <string name="lock_clock_measure_action">Measure</string>
     <string name="lock_clock_section">Wallpaper clock</string>
     <string name="lock_clock_needs_wallpaper">Not set. Tap to set it up under Wallpapers.</string>
     <string name="lock_screen_clock_hide_forced_desc">Hidden while the Essentials wallpaper draws the clock</string>

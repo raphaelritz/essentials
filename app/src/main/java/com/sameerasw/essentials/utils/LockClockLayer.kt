@@ -57,6 +57,9 @@ class LockClockLayer(
         /** Clocks the always-on display shows as an outline; the others thin their strokes instead. */
         private val OUTLINE_CLOCKS = setOf("DIGITAL_CLOCK_CALLIGRAPHY")
 
+        /** Clocks whose layout follows the weight and width sliders; the others ignore them. */
+        private val AXIS_CLOCKS = setOf("DEFAULT", "DIGITAL_CLOCK_FLEX")
+
         /**
          * The keyguard's clock swap: one emphasized tween that also carries the small face along
          * with the smartspace cards. The keyguard cuts between its faces on that curve within a
@@ -131,6 +134,8 @@ class LockClockLayer(
         fun supports(clockId: String): Boolean = clockId in SUPPORTED_CLOCKS
 
         fun outlines(clockId: String): Boolean = clockId in OUTLINE_CLOCKS
+
+        fun followsAxes(clockId: String): Boolean = clockId in AXIS_CLOCKS
 
         /** The time into the swap at which its eased timeline reaches [eased]. */
         fun swapElapsed(eased: Float): Long = elapsed(SWAP_INTERPOLATOR, eased, SWAP_MS)

@@ -3215,14 +3215,20 @@ class SettingsRepository(
 
     fun setLockClockSmall(value: Boolean) = putBoolean(KEY_LOCK_CLOCK_SMALL, value)
 
-    fun getLockClockRect(small: Boolean): Rect? = Rect.unflattenFromString(getString(lockClockRectKey(small), null))
+    fun getLockClockRect(
+        small: Boolean,
+        clockId: String = HostedClock.currentClockId(context),
+    ): Rect? = Rect.unflattenFromString(getString(lockClockRectKey(small, clockId), null))
 
     fun setLockClockRect(
         small: Boolean,
         value: Rect,
     ) = putString(lockClockRectKey(small), value.flattenToString())
 
-    private fun lockClockRectKey(small: Boolean) = perClock(if (small) KEY_LOCK_CLOCK_RECT_SMALL else KEY_LOCK_CLOCK_RECT_LARGE)
+    private fun lockClockRectKey(
+        small: Boolean,
+        clockId: String = HostedClock.currentClockId(context),
+    ) = perClock(if (small) KEY_LOCK_CLOCK_RECT_SMALL else KEY_LOCK_CLOCK_RECT_LARGE, clockId)
 
     fun getLockClockAodTop(small: Boolean): Int? = lockClockAodTopKey(small).takeIf(::contains)?.let { getInt(it) }
 
@@ -3234,7 +3240,10 @@ class SettingsRepository(
     private fun lockClockAodTopKey(small: Boolean) = perClock(if (small) KEY_LOCK_CLOCK_AOD_TOP_SMALL else KEY_LOCK_CLOCK_AOD_TOP_LARGE)
 
     /** Each clock rests in a rectangle of its own, so what is measured of it is kept under its id. */
-    private fun perClock(key: String) = "$key:${HostedClock.currentClockId(context)}"
+    private fun perClock(
+        key: String,
+        clockId: String = HostedClock.currentClockId(context),
+    ) = "$key:$clockId"
 
     fun getLockClockOutline(): Boolean = getBoolean(KEY_LOCK_CLOCK_OUTLINE, false)
 
@@ -3315,7 +3324,7 @@ class SettingsRepository(
 
     fun setLockClockSwapElapsed(value: Long) = putLong(KEY_LOCK_CLOCK_SWAP_ELAPSED, value)
 
-    fun getLockClockLayoutKey(): String? = getString(perClock(KEY_LOCK_CLOCK_LAYOUT_KEY), null)
+    fun getLockClockLayoutKey(clockId: String = HostedClock.currentClockId(context)): String? = getString(perClock(KEY_LOCK_CLOCK_LAYOUT_KEY, clockId), null)
 
     fun setLockClockLayoutKey(value: String) = putString(perClock(KEY_LOCK_CLOCK_LAYOUT_KEY), value)
 

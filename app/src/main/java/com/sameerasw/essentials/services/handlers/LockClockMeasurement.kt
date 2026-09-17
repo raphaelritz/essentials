@@ -29,6 +29,8 @@ import android.widget.TextView
 import com.sameerasw.essentials.R
 import com.sameerasw.essentials.data.repository.SettingsRepository
 import com.sameerasw.essentials.utils.ClockLog
+import com.sameerasw.essentials.utils.HostedClock
+import com.sameerasw.essentials.utils.LockClockLayer
 import com.sameerasw.essentials.utils.LockScreenClockLocator
 import com.sameerasw.essentials.utils.LockScreenClockSize
 import com.sameerasw.essentials.utils.SecureSettings
@@ -74,10 +76,14 @@ class LockClockMeasurement(
         /** The transition from the always-on display takes 500 ms; the measurement reads once the keyguard is at rest. */
         private const val SETTLE_MS = 1000L
 
-        /** What the keyguard's layout depends on; a change means measuring again. */
-        fun layoutKey(context: Context): String {
+        /** What the keyguard's layout of [clockId] depends on; a change means measuring again. */
+        fun layoutKey(
+            context: Context,
+            clockId: String = HostedClock.currentClockId(context),
+        ): String {
             val metrics = context.resources.displayMetrics
-            return "${metrics.widthPixels}x${metrics.heightPixels}@${metrics.densityDpi}/${context.resources.configuration.fontScale}/${Build.FINGERPRINT}"
+            val axes = if (LockClockLayer.followsAxes(clockId)) HostedClock.currentAxes(context)?.let { "/${it["wght"]}/${it["wdth"]}" }.orEmpty() else ""
+            return "${metrics.widthPixels}x${metrics.heightPixels}@${metrics.densityDpi}/${context.resources.configuration.fontScale}/${Build.FINGERPRINT}$axes"
         }
     }
 
